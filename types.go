@@ -5,7 +5,7 @@ type Node interface {
 	Key() NodeKey
 }
 
-type EdgeKind int
+type EdgeKind interface{}
 
 type Edge interface {
 	Kind() EdgeKind
@@ -19,7 +19,7 @@ type Options struct {
 
 type Graph interface {
 	Add(Node, ...Node) error
-	Associate(kind EdgeKind, from, to Node) (Edge, error)
+	Associate(from Node, kind EdgeKind, to Node) (Edge, error)
 	Has(Node) bool
-	Edge(kind EdgeKind, from, to Node) bool
+	Edge(from Node, kind EdgeKind, to Node) bool
 }

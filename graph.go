@@ -12,10 +12,35 @@ type node struct {
 	ids map[EdgeKind]int64
 }
 
+type edge struct {
+	from Node
+	to   Node
+	kind EdgeKind
+}
+
+func (e *edge) Kind() EdgeKind {
+	return e.kind
+}
+func (e *edge) From() Node {
+	return e.from
+}
+func (e *edge) To() Node {
+	return e.to
+}
+func (e *edge) Reverse() Edge {
+	return &edge{
+		kind: e.kind,
+		from: e.to,
+		to:   e.from,
+	}
+}
+
 type graph struct {
 	Options
 	nodes    map[Node]*node
+	ids      map[EdgeKind]map[int64]*node
 	builders map[EdgeKind]gonum.DirectedBuilder
+	lookup   map[EdgeKind]map[int64]*node
 
 	lock sync.RWMutex
 }
@@ -24,6 +49,7 @@ func newGraph(options Options) *graph {
 	return &graph{
 		Options:  options,
 		nodes:    map[Node]*node{},
+		ids:      map[EdgeKind]map[int64]*node{},
 		builders: map[EdgeKind]gonum.DirectedBuilder{},
 	}
 }
@@ -54,7 +80,7 @@ func (g *graph) Has(n Node) bool {
 	return has
 }
 
-func (g *graph) Associate(kind EdgeKind, from, to Node) (Edge, error) {
+func (g *graph) Associate(from Node, kind EdgeKind, to Node) (Edge, error) {
 	// first check for proper node membership
 	if !g.Has(from) {
 		return nil, ErrNoSuchNode{Node: from, context: "From"}
@@ -67,9 +93,12 @@ func (g *graph) Associate(kind EdgeKind, from, to Node) (Edge, error) {
 	defer g.lock.Unlock()
 
 	// add a new graph builder if this is a new kind
-	_, has := g.builders[kind]
-	if !has {
+	if _, has := g.builders[kind]; !has {
 		g.builders[kind] = simple.NewDirectedGraph() // TODO: copy graph, mutate, then commit at the end?
+	}
+	// mapping of node id to Node
+	if _, has := g.ids[kind]; !has {
+		g.ids[kind] = map[int64]*node{}
 	}
 
 	// get the node id for the Node to add edges
@@ -83,17 +112,49 @@ func (g *graph) Associate(kind EdgeKind, from, to Node) (Edge, error) {
 	get_id := func(b gonum.DirectedBuilder, _k EdgeKind, _n Node) (_id int64) {
 		if _, has := g.nodes[_n].ids[_k]; !has {
 			// add the node to the graph
-			g.nodes[_n].ids[_k] = g.builders[_k].NewNode().ID()
+			new := g.builders[_k].NewNode()
+			g.builders[_k].AddNode(new)
+			id := new.ID()
+			g.ids[_k][id] = g.nodes[_n]
+			g.nodes[_n].ids[_k] = id
 		}
 		return g.nodes[_n].ids[_k]
 	}
 
 	builder := g.builders[kind]
-	builder.NewEdge(builder.Node(get_id(builder, kind, from)), builder.Node(get_id(builder, kind, to)))
 
-	return nil, nil
+	fromID := get_id(builder, kind, from)
+	toID := get_id(builder, kind, to)
+
+	new := builder.NewEdge(builder.Node(fromID), builder.Node(toID))
+	builder.SetEdge(new)
+
+	return &edge{
+		kind: kind,
+		to:   to,
+		from: from,
+	}, nil
+
 }
 
-func (g *graph) Edge(kind EdgeKind, from, to Node) bool {
-	return false
+func (g *graph) Edge(from Node, kind EdgeKind, to Node) bool {
+	g.lock.RLock()
+	defer g.lock.RUnlock()
+
+	builder, has := g.builders[kind]
+	if !has {
+		return false
+	}
+
+	_from, has := g.nodes[from]
+	if !has {
+		return false
+	}
+
+	_to, has := g.nodes[to]
+	if !has {
+		return false
+	}
+
+	return builder.HasEdgeBetween(_from.ids[kind], _to.ids[kind])
 }
