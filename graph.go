@@ -1,10 +1,12 @@
 package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
+	"fmt"
 	"sync"
 
 	gonum "gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/simple"
+	"gonum.org/v1/gonum/graph/topo"
 )
 
 type node struct {
@@ -157,4 +159,62 @@ func (g *graph) Edge(from Node, kind EdgeKind, to Node) bool {
 	}
 
 	return builder.HasEdgeBetween(_from.ids[kind], _to.ids[kind])
+}
+
+func (g *graph) toGonum(k EdgeKind, p Path) (out []gonum.Node, err error) {
+	b, has := g.builders[k]
+	if !has {
+		return
+	}
+
+	out = []gonum.Node{}
+	for _, n := range p {
+		if nn, has := g.nodes[n]; has {
+			out = append(out, b.Node(nn.ids[k]))
+		}
+	}
+	return
+}
+
+func (g *graph) fromGonum(kind EdgeKind, nn []gonum.Node) (Path, error) {
+
+	ids, has := g.ids[kind]
+	if !has {
+		return nil, nil
+	}
+
+	p := Path{}
+
+	for _, gn := range nn {
+		if n, has := ids[gn.ID()]; has {
+			p = append(p, n.Node)
+		} else {
+			panic(fmt.Errorf("Unmapped id %v: incorrect usage of API", gn.ID()))
+		}
+	}
+	return p, nil
+}
+
+func DirectedCycles(g Graph, kind EdgeKind) ([]Path, error) {
+	if g, ok := g.(*graph); !ok {
+		return nil, ErrNotSupported{g}
+	} else {
+
+		builder, has := g.builders[kind]
+		if has {
+
+			cycles := []Path{}
+			for _, cycle := range topo.DirectedCyclesIn(builder) {
+
+				if p, err := g.fromGonum(kind, cycle); err != nil {
+					return nil, err
+				} else {
+					cycles = append(cycles, p)
+				}
+			}
+
+			return cycles, nil
+		}
+	}
+	return nil, nil
 }

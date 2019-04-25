@@ -20,3 +20,11 @@ type ErrNoSuchNode struct {
 func (e ErrNoSuchNode) Error() string {
 	return fmt.Sprintf("Missing %s node:%s", e.context, e.Node.Key())
 }
+
+type ErrNotSupported struct {
+	Graph
+}
+
+func (e ErrNotSupported) Error() string {
+	return fmt.Sprintf("Not supported: %v", e.Graph)
+}

@@ -5,6 +5,8 @@ type Node interface {
 	Key() NodeKey
 }
 
+type Path []Node
+
 type EdgeKind interface{}
 
 type Edge interface {
