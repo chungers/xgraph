@@ -228,7 +228,6 @@ func TestDirectedSort(t *testing.T) {
 
 	require.Equal(t, Reverse(forward), backward)
 
-	// add more nodes for the next relation
 	for i := m; i < 2*m; i++ {
 		this := &nodeT{id: fmt.Sprintf("N%v", i)}
 		g.Add(this)
@@ -245,6 +244,20 @@ func TestDirectedSort(t *testing.T) {
 	// The last node should be the mid-point
 	// 0 -> 1 -> 2 -> 3 <- 4 <- 5 <- 6 <- 7 for m = 4
 	require.Equal(t, fmt.Sprintf("N%v", m-1), forward[len(forward)-1].(*nodeT).id)
-
 	t.Log(forward)
+
+	from := g.Node(NodeKey("N1"))
+	to := g.Node(NodeKey("N3"))
+
+	exists, err := PathExistsIn(g, next, from, to)
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	exists, err = PathExistsIn(g, next, g.Node(NodeKey("N2")), g.Node(NodeKey("N7")))
+	require.NoError(t, err)
+	require.False(t, exists)
+
+	exists, err = PathExistsIn(g, EdgeKind(0), g.Node(NodeKey("N2")), g.Node(NodeKey("N7")))
+	require.NoError(t, err)
+	require.False(t, exists)
 }

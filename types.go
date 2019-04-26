@@ -23,5 +23,6 @@ type Graph interface {
 	Add(Node, ...Node) error
 	Associate(from Node, kind EdgeKind, to Node) (Edge, error)
 	Has(Node) bool
+	Node(NodeKey) Node
 	Edge(from Node, kind EdgeKind, to Node) bool
 }

@@ -43,6 +43,7 @@ type graph struct {
 	ids      map[EdgeKind]map[int64]*node
 	builders map[EdgeKind]gonum.DirectedBuilder
 	lookup   map[EdgeKind]map[int64]*node
+	nodeKeys map[string]Node
 
 	lock sync.RWMutex
 }
@@ -52,6 +53,7 @@ func newGraph(options Options) *graph {
 		Options:  options,
 		nodes:    map[Node]*node{},
 		ids:      map[EdgeKind]map[int64]*node{},
+		nodeKeys: map[string]Node{},
 		builders: map[EdgeKind]gonum.DirectedBuilder{},
 	}
 }
@@ -69,6 +71,7 @@ func (g *graph) Add(n Node, other ...Node) error {
 
 	for _, add := range append([]Node{n}, other...) {
 		g.nodes[add] = &node{Node: add}
+		g.nodeKeys[string(add.Key())] = add
 	}
 
 	return nil
@@ -80,6 +83,13 @@ func (g *graph) Has(n Node) bool {
 
 	_, has := g.nodes[n]
 	return has
+}
+
+func (g *graph) Node(k NodeKey) Node {
+	g.lock.RLock()
+	defer g.lock.RUnlock()
+
+	return g.nodeKeys[string(k)]
 }
 
 func (g *graph) Associate(from Node, kind EdgeKind, to Node) (Edge, error) {
@@ -242,11 +252,20 @@ func DirectedSort(g Graph, kind EdgeKind) (sorted []Node, err error) {
 	return
 }
 
-// Reverse reverses the slice in place and returns the slice for convenience
-func Reverse(n []Node) (out []Node) {
-	out = n
-	for left, right := 0, len(n)-1; left < right; left, right = left+1, right-1 {
-		n[left], n[right] = n[right], n[left]
+func PathExistsIn(g Graph, kind EdgeKind, from, to Node) (bool, error) {
+	xg, ok := g.(*graph)
+	if !ok {
+		return false, ErrNotSupported{g}
 	}
-	return
+
+	builder, has := xg.builders[kind]
+	if !has {
+		return false, nil
+	}
+
+	args, err := xg.toGonum(kind, []Node{from, to})
+	if err != nil {
+		return false, err
+	}
+	return topo.PathExistsIn(builder, args[0], args[1]), nil
 }
