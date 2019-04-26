@@ -29,13 +29,6 @@ func (e *edge) From() Node {
 func (e *edge) To() Node {
 	return e.to
 }
-func (e *edge) Reverse() Edge {
-	return &edge{
-		kind: e.kind,
-		from: e.to,
-		to:   e.from,
-	}
-}
 
 type graph struct {
 	Options

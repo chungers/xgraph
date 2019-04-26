@@ -13,7 +13,6 @@ type Edge interface {
 	Kind() EdgeKind
 	From() Node
 	To() Node
-	Reverse() Edge
 }
 
 type Options struct {
