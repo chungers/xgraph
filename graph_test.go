@@ -1,6 +1,7 @@
 package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -60,7 +61,11 @@ type nodeT struct {
 }
 
 func (n *nodeT) Key() NodeKey {
-	return []byte(n.id)
+	return NodeKey(n.id)
+}
+
+func (n *nodeT) String() string {
+	return n.id
 }
 
 func TestAdd(t *testing.T) {
@@ -190,4 +195,56 @@ func TestDirectedCycles(t *testing.T) {
 	require.Equal(t, 2, len(cycles))
 	require.Equal(t, Path{A, B, C, A}, cycles[0])
 	require.Equal(t, Path{A, B, A}, cycles[1])
+}
+
+func TestDirectedSort(t *testing.T) {
+
+	g := New(Options{})
+	next := EdgeKind(1)
+	prev := EdgeKind(2)
+
+	m := 4
+	var last Node
+	for i := 0; i < m; i++ {
+		this := &nodeT{id: fmt.Sprintf("N%v", i)}
+		g.Add(this)
+
+		if last != nil {
+			g.Associate(last, next, this)
+			g.Associate(this, prev, last)
+		}
+		last = this
+	}
+
+	forward, err := DirectedSort(g, next)
+	require.NoError(t, err)
+
+	backward, err := DirectedSort(g, prev)
+	require.NoError(t, err)
+
+	for i := range forward {
+		require.Equal(t, forward[i], backward[len(backward)-i-1])
+	}
+
+	require.Equal(t, Reverse(forward), backward)
+
+	// add more nodes for the next relation
+	for i := m; i < 2*m; i++ {
+		this := &nodeT{id: fmt.Sprintf("N%v", i)}
+		g.Add(this)
+
+		if last != nil {
+			g.Associate(this, next, last)
+		}
+		last = this
+	}
+
+	forward, err = DirectedSort(g, next)
+	require.NoError(t, err)
+
+	// The last node should be the mid-point
+	// 0 -> 1 -> 2 -> 3 <- 4 <- 5 <- 6 <- 7 for m = 4
+	require.Equal(t, fmt.Sprintf("N%v", m-1), forward[len(forward)-1].(*nodeT).id)
+
+	t.Log(forward)
 }

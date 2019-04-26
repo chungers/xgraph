@@ -195,26 +195,58 @@ func (g *graph) fromGonum(kind EdgeKind, nn []gonum.Node) (Path, error) {
 	return p, nil
 }
 
-func DirectedCycles(g Graph, kind EdgeKind) ([]Path, error) {
-	if g, ok := g.(*graph); !ok {
-		return nil, ErrNotSupported{g}
-	} else {
+func DirectedCycles(g Graph, kind EdgeKind) (cycles []Path, err error) {
+	xg, ok := g.(*graph)
+	if !ok {
+		err = ErrNotSupported{g}
+		return
+	}
 
-		builder, has := g.builders[kind]
-		if has {
+	builder, has := xg.builders[kind]
+	if !has {
+		return
+	}
 
-			cycles := []Path{}
-			for _, cycle := range topo.DirectedCyclesIn(builder) {
+	cycles = []Path{}
+	for _, cycle := range topo.DirectedCyclesIn(builder) {
 
-				if p, err := g.fromGonum(kind, cycle); err != nil {
-					return nil, err
-				} else {
-					cycles = append(cycles, p)
-				}
-			}
-
-			return cycles, nil
+		if p, err := xg.fromGonum(kind, cycle); err != nil {
+			return nil, err
+		} else {
+			cycles = append(cycles, p)
 		}
 	}
-	return nil, nil
+
+	return
+}
+
+func DirectedSort(g Graph, kind EdgeKind) (sorted []Node, err error) {
+	xg, ok := g.(*graph)
+	if !ok {
+		err = ErrNotSupported{g}
+		return
+	}
+
+	builder, has := xg.builders[kind]
+	if !has {
+		return
+	}
+
+	s, err := topo.Sort(builder)
+	if err != nil {
+		return
+	}
+
+	sorted, err = xg.fromGonum(kind, s)
+
+	return
+}
+
+// Reverse reverses the slice in place and returns the slice for convenience
+func Reverse(n []Node) (out []Node) {
+	out = n
+	for left, right := 0, len(n)-1; left < right; left, right = left+1, right-1 {
+		n[left], n[right] = n[right], n[left]
+	}
+	return
 }
