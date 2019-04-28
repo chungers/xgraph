@@ -59,8 +59,12 @@ type nodeT struct {
 	id string
 }
 
-func (n *nodeT) Key() NodeKey {
-	return []byte(n.id)
+func (n *nodeT) NodeKey() NodeKey {
+	return NodeKey(n.id)
+}
+
+func (n *nodeT) String() string {
+	return n.id
 }
 
 func TestAdd(t *testing.T) {
@@ -75,7 +79,7 @@ func TestAdd(t *testing.T) {
 	require.NoError(t, g.Add(A, B, C, plus, minus))
 
 	require.NoError(t, g.Add(A), "Idempotent: same node by identity")
-	require.NoError(t, g.Add(&nodeT{id: "A"}), "OK for duplicate key when struct identity fails")
+	require.Error(t, g.Add(&nodeT{id: "A"}), "Not OK for duplicate key when struct identity fails")
 
 	for _, n := range []Node{plus, minus, A, B, C} {
 		require.True(t, g.Has(n))
@@ -113,81 +117,4 @@ func TestAssociate(t *testing.T) {
 	require.True(t, g.Edge(A, likes, C), "A likes C.")
 	require.False(t, g.Edge(C, shares, A), "Shares is not an association kind between A and B.")
 
-}
-
-func TestPaths(t *testing.T) {
-
-	A := &nodeT{id: "A"}
-	B := &nodeT{id: "B"}
-	C := &nodeT{id: "C"}
-	D := &nodeT{id: "D"}
-
-	g := New(Options{})
-	require.NoError(t, g.Add(A, B, C, D))
-
-	refs := EdgeKind(1)
-	likes := EdgeKind(2)
-
-	g.Associate(A, refs, B)
-	g.Associate(B, refs, C)
-	g.Associate(C, refs, D)
-
-	gn, err := g.(*graph).toGonum(refs, Path{A, B, C, D})
-	require.NoError(t, err)
-	require.Equal(t, 4, len(gn))
-
-	nn, err := g.(*graph).fromGonum(refs, gn)
-	require.NoError(t, err)
-	require.Equal(t, Path{A, B, C, D}, nn)
-
-	gn2, err := g.(*graph).toGonum(likes, Path{A, B})
-	require.NoError(t, err)
-	require.Equal(t, 0, len(gn2))
-
-	nn2, err := g.(*graph).fromGonum(likes, gn)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(nn2))
-
-	cycles, err := DirectedCycles(g, refs)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(cycles))
-}
-
-func TestDirectedCycles(t *testing.T) {
-
-	A := &nodeT{id: "A"}
-	B := &nodeT{id: "B"}
-	C := &nodeT{id: "C"}
-	D := &nodeT{id: "D"}
-
-	g := New(Options{})
-	require.NoError(t, g.Add(A, B, C, D))
-
-	refs := EdgeKind(1)
-
-	g.Associate(A, refs, B)
-	g.Associate(B, refs, C)
-	g.Associate(C, refs, D)
-	g.Associate(D, refs, A)
-
-	cycles, err := DirectedCycles(g, refs)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(cycles))
-	require.Equal(t, Path{A, B, C, D, A}, cycles[0])
-
-	imports := EdgeKind(2)
-	g.Associate(A, imports, B)
-	g.Associate(B, imports, A)
-	g.Associate(B, imports, C)
-	g.Associate(C, imports, A)
-
-	cycles, err = DirectedCycles(g, imports)
-	require.NoError(t, err)
-
-	for i := range cycles {
-		t.Log(g.(*graph).toGonum(imports, cycles[i]))
-	}
-	require.Equal(t, 2, len(cycles))
-	require.Equal(t, Path{A, B, C, A}, cycles[0])
-	require.Equal(t, Path{A, B, A}, cycles[1])
 }
