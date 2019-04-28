@@ -2,7 +2,7 @@ package xgraph // import "github.com/orkestr8/xgraph"
 
 type NodeKey []byte
 type Node interface {
-	Key() NodeKey
+	NodeKey() NodeKey
 }
 
 type Path []Node

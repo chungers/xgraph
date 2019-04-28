@@ -9,7 +9,7 @@ type ErrDuplicateKey struct {
 }
 
 func (e ErrDuplicateKey) Error() string {
-	return fmt.Sprintf("Duplicate key:%s", e.Node.Key())
+	return fmt.Sprintf("Duplicate key:%s", e.Node.NodeKey())
 }
 
 type ErrNoSuchNode struct {
@@ -18,7 +18,7 @@ type ErrNoSuchNode struct {
 }
 
 func (e ErrNoSuchNode) Error() string {
-	return fmt.Sprintf("Missing %s node:%s", e.context, e.Node.Key())
+	return fmt.Sprintf("Missing %s node:%s", e.context, e.Node.NodeKey())
 }
 
 type ErrNotSupported struct {
