@@ -27,7 +27,7 @@ func (e *edge) To() Node {
 
 type graph struct {
 	Options
-	nodes    map[Node]*node
+	nodes    map[Node]interface{}
 	directed map[EdgeKind]*directed
 	nodeKeys map[string]Node
 
@@ -37,26 +37,27 @@ type graph struct {
 func newGraph(options Options) *graph {
 	return &graph{
 		Options:  options,
-		nodes:    map[Node]*node{},
+		nodes:    map[Node]interface{}{},
 		nodeKeys: map[string]Node{},
 		directed: map[EdgeKind]*directed{},
 	}
 }
 
+/*
+ Add registers the given Nodes to the graph.  Duplicate key but with different identity is not allowed.
+*/
 func (g *graph) Add(n Node, other ...Node) error {
 	g.lock.Lock()
 	defer g.lock.Unlock()
 
 	for _, add := range append([]Node{n}, other...) {
-		found, has := g.nodes[add]
-		if has && found.Node != add {
-			return ErrDuplicateKey{n}
+		found, has := g.nodeKeys[string(add.NodeKey())]
+		if !has {
+			g.nodes[add] = &node{Node: add}
+			g.nodeKeys[string(add.NodeKey())] = add
+		} else if found != add {
+			return ErrDuplicateKey{add}
 		}
-	}
-
-	for _, add := range append([]Node{n}, other...) {
-		g.nodes[add] = &node{Node: add}
-		g.nodeKeys[string(add.NodeKey())] = add
 	}
 
 	return nil
@@ -92,14 +93,6 @@ func (g *graph) Associate(from Node, kind EdgeKind, to Node) (Edge, error) {
 	// add a new graph builder if this is a new kind
 	if _, has := g.directed[kind]; !has {
 		g.directed[kind] = newDirected()
-	}
-
-	// get the node id for the Node to add edges
-	if g.nodes[from].ids == nil {
-		g.nodes[from].ids = map[EdgeKind]int64{}
-	}
-	if g.nodes[to].ids == nil {
-		g.nodes[to].ids = map[EdgeKind]int64{}
 	}
 
 	dg := g.directed[kind]
