@@ -31,7 +31,7 @@ type graph struct {
 	Options
 	nodes    map[Node]interface{}
 	directed map[EdgeKind]*directed
-	nodeKeys map[string]Node
+	nodeKeys map[interface{}]Node
 
 	lock sync.RWMutex
 }
@@ -40,7 +40,7 @@ func newGraph(options Options) *graph {
 	return &graph{
 		Options:  options,
 		nodes:    map[Node]interface{}{},
-		nodeKeys: map[string]Node{},
+		nodeKeys: map[interface{}]Node{},
 		directed: map[EdgeKind]*directed{},
 	}
 }
@@ -53,10 +53,10 @@ func (g *graph) Add(n Node, other ...Node) error {
 	defer g.lock.Unlock()
 
 	for _, add := range append([]Node{n}, other...) {
-		found, has := g.nodeKeys[string(add.NodeKey())]
+		found, has := g.nodeKeys[add.NodeKey()]
 		if !has {
 			g.nodes[add] = &node{Node: add}
-			g.nodeKeys[string(add.NodeKey())] = add
+			g.nodeKeys[add.NodeKey()] = add
 		} else if found != add {
 			return ErrDuplicateKey{add}
 		}
@@ -77,7 +77,7 @@ func (g *graph) Node(k NodeKey) Node {
 	g.lock.RLock()
 	defer g.lock.RUnlock()
 
-	return g.nodeKeys[string(k)]
+	return g.nodeKeys[k]
 }
 
 func (g *graph) Associate(from Node, kind EdgeKind, to Node) (Edge, error) {
