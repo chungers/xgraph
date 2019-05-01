@@ -1,6 +1,6 @@
 package xgraph // import "github.com/orkestr8/xgraph"
 
-func New(options Options) Graph {
+func Builder(options Options) GraphBuilder {
 	return newGraph(options)
 }
 
@@ -11,4 +11,16 @@ func Reverse(n []Node) (out []Node) {
 		n[left], n[right] = n[right], n[left]
 	}
 	return
+}
+
+func NodeSlice(nodes Nodes) []Node {
+	all := []Node{}
+	for {
+		if n, ok := <-nodes; !ok {
+			break
+		} else {
+			all = append(all, n)
+		}
+	}
+	return all
 }

@@ -14,7 +14,7 @@ func TestPaths(t *testing.T) {
 	C := &nodeT{id: "C"}
 	D := &nodeT{id: "D"}
 
-	g := New(Options{})
+	g := Builder(Options{})
 	require.NoError(t, g.Add(A, B, C, D))
 
 	refs := EdgeKind(1)
@@ -48,7 +48,7 @@ func TestScopeDirected(t *testing.T) {
 	A := &nodeT{id: "A"}
 	B := &nodeT{id: "B"}
 
-	g := New(Options{})
+	g := Builder(Options{})
 	require.NoError(t, g.Add(A, B))
 	refs := EdgeKind(1)
 	g.Associate(A, refs, B)
@@ -72,7 +72,7 @@ func TestDirectedCycles(t *testing.T) {
 	C := &nodeT{id: "C"}
 	D := &nodeT{id: "D"}
 
-	g := New(Options{})
+	g := Builder(Options{})
 	require.NoError(t, g.Add(A, B, C, D))
 
 	refs := EdgeKind(1)
@@ -91,7 +91,7 @@ func TestDirectedCycles(t *testing.T) {
 	g.Associate(A, imports, B)
 	g.Associate(B, imports, A)
 	g.Associate(B, imports, C)
-	g.Associate(C, imports, A)
+	g.Associate(C, imports, B)
 
 	cycles, err = DirectedCycles(g, imports)
 	require.NoError(t, err)
@@ -100,17 +100,17 @@ func TestDirectedCycles(t *testing.T) {
 		t.Log(g.(*graph).directed[imports].gonum(cycles[i][0], cycles[i][1:]...))
 	}
 	require.Equal(t, 2, len(cycles))
-	require.Equal(t, Path{A, B, C, A}, cycles[0])
-	require.Equal(t, Path{A, B, A}, cycles[1])
+	require.Equal(t, Path{A, B, A}, cycles[0])
+	require.Equal(t, Path{B, C, B}, cycles[1])
 }
 
 func TestDirectedSort(t *testing.T) {
 
-	g := New(Options{})
+	g := Builder(Options{})
 	next := EdgeKind(1)
 	prev := EdgeKind(2)
 
-	m := 4
+	m := 1000
 	var last Node
 	for i := 0; i < m; i++ {
 		this := &nodeT{id: fmt.Sprintf("N%v", i)}
@@ -151,7 +151,7 @@ func TestDirectedSort(t *testing.T) {
 	// The last node should be the mid-point
 	// 0 -> 1 -> 2 -> 3 <- 4 <- 5 <- 6 <- 7 for m = 4
 	require.Equal(t, fmt.Sprintf("N%v", m-1), forward[len(forward)-1].(*nodeT).id)
-	t.Log(forward)
+	//t.Log(forward)
 
 	from := g.Node(NodeKey("N1"))
 	to := g.Node(NodeKey("N3"))
@@ -160,11 +160,36 @@ func TestDirectedSort(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, exists)
 
-	exists, err = PathExistsIn(g, next, g.Node(NodeKey("N2")), g.Node(NodeKey("N7")))
+	exists, err = PathExistsIn(g, EdgeKind(0), from, to)
 	require.NoError(t, err)
 	require.False(t, exists)
 
-	exists, err = PathExistsIn(g, EdgeKind(0), g.Node(NodeKey("N2")), g.Node(NodeKey("N7")))
+	exists, err = PathExistsIn(g, next, g.Node(NodeKey("N1")), last)
 	require.NoError(t, err)
 	require.False(t, exists)
+
+}
+
+func TestGraphQueries(t *testing.T) {
+
+	g := Builder(Options{})
+	likes := EdgeKind(1)
+
+	g.Add(&nodeT{id: "David"})
+
+	m := 10
+	for i := 0; i < m*2; i++ {
+		this := &nodeT{id: fmt.Sprintf("LIKED-%v", i)}
+		g.Add(this)
+		g.Associate(g.Node(NodeKey("David")), likes, this)
+	}
+
+	for i := 0; i < m; i++ {
+		that := &nodeT{id: fmt.Sprintf("LIKER-%v", i)}
+		g.Add(that)
+		g.Associate(that, likes, g.Node(NodeKey("David")))
+	}
+
+	require.Equal(t, m, len(NodeSlice(g.To(g.Node(NodeKey("David")), likes))))
+	require.Equal(t, m*2, len(NodeSlice(g.From(g.Node(NodeKey("David")), likes))))
 }

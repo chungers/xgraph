@@ -2,6 +2,8 @@ package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
 	"sync"
+
+	gonum "gonum.org/v1/gonum/graph"
 )
 
 type node struct {
@@ -131,4 +133,52 @@ func (g *graph) Edge(from Node, kind EdgeKind, to Node) bool {
 		return false
 	}
 	return directed.HasEdgeBetween(args[0].ID(), args[1].ID())
+}
+
+func (g *graph) From(from Node, kind EdgeKind) (nodes Nodes) {
+	return g.find(kind, from, false)
+}
+
+func (g *graph) To(to Node, kind EdgeKind) (nodes Nodes) {
+	return g.find(kind, to, true)
+}
+
+func (g *graph) find(kind EdgeKind, x Node, to bool) (nodes Nodes) {
+	g.lock.RLock()
+	defer g.lock.RUnlock()
+
+	ch := make(chan Node)
+	nodes = ch
+
+	directed, has := g.directed[kind]
+	if !has {
+		close(ch)
+		return
+	}
+
+	arg, has := directed.ids[x]
+	if !has {
+		close(ch)
+		return
+	}
+
+	go func() {
+		defer close(ch)
+
+		var result gonum.Nodes
+		if to {
+			result = directed.To(arg)
+		} else {
+			result = directed.From(arg)
+		}
+
+		for {
+			if next := result.Next(); !next {
+				break
+			}
+			ch <- directed.nodes[result.Node().ID()]
+		}
+	}()
+
+	return
 }
