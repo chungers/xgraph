@@ -75,7 +75,7 @@ func TestAdd(t *testing.T) {
 	plus := &nodeT{id: "+"}
 	minus := &nodeT{id: "-"}
 
-	g := New(Options{})
+	g := Builder(Options{})
 	require.NoError(t, g.Add(A, B, C, plus, minus))
 
 	require.NoError(t, g.Add(A), "Idempotent: same node by identity")
@@ -93,7 +93,7 @@ func TestAssociate(t *testing.T) {
 	C := &nodeT{id: "C"}
 	D := &nodeT{id: "D"}
 
-	g := New(Options{})
+	g := Builder(Options{})
 	require.NoError(t, g.Add(A, B, C))
 
 	require.True(t, g.Has(A))
