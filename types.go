@@ -27,10 +27,17 @@ type GraphBuilder interface {
 
 type Nodes <-chan Node
 
+type Edges <-chan Edge
+
+type NodesOrEdges interface {
+	Nodes() Nodes
+	Edges() Edges
+}
+
 type Graph interface {
 	Has(Node) bool
 	Node(NodeKey) Node
 	Edge(from Node, kind EdgeKind, to Node) Edge
-	To(Node, EdgeKind) Nodes
-	From(Node, EdgeKind) Nodes
+	To(Node, EdgeKind) NodesOrEdges
+	From(Node, EdgeKind) NodesOrEdges
 }

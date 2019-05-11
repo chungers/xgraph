@@ -144,12 +144,31 @@ func (g *graph) Edge(from Node, kind EdgeKind, to Node) Edge {
 	return directed.edges[directed.Edge(args[0].ID(), args[1].ID())]
 }
 
-func (g *graph) From(from Node, kind EdgeKind) (nodes Nodes) {
-	return g.find(kind, from, false)
+type nodesOrEdges struct {
+	nodes func() Nodes
+	edges func() Edges
 }
 
-func (g *graph) To(to Node, kind EdgeKind) (nodes Nodes) {
-	return g.find(kind, to, true)
+func (q *nodesOrEdges) Nodes() Nodes {
+	return q.nodes()
+}
+
+func (q *nodesOrEdges) Edges() Edges {
+	return q.edges()
+}
+
+func (g *graph) From(from Node, kind EdgeKind) NodesOrEdges {
+	return &nodesOrEdges{
+		nodes: func() Nodes { return g.find(kind, from, false) },
+		edges: func() Edges { return g.findEdges(kind, from, false) },
+	}
+}
+
+func (g *graph) To(to Node, kind EdgeKind) NodesOrEdges {
+	return &nodesOrEdges{
+		nodes: func() Nodes { return g.find(kind, to, true) },
+		edges: func() Edges { return g.findEdges(kind, to, true) },
+	}
 }
 
 func (g *graph) find(kind EdgeKind, x Node, to bool) (nodes Nodes) {
@@ -186,6 +205,51 @@ func (g *graph) find(kind EdgeKind, x Node, to bool) (nodes Nodes) {
 				break
 			}
 			ch <- directed.nodes[result.Node().ID()]
+		}
+	}()
+
+	return
+}
+
+func (g *graph) findEdges(kind EdgeKind, x Node, to bool) (edges Edges) {
+	g.lock.RLock()
+	defer g.lock.RUnlock()
+
+	ch := make(chan Edge)
+	edges = ch
+
+	directed, has := g.directed[kind]
+	if !has {
+		close(ch)
+		return
+	}
+
+	arg, has := directed.ids[x]
+	if !has {
+		close(ch)
+		return
+	}
+
+	go func() {
+		defer close(ch)
+
+		var result gonum.Nodes
+		if to {
+			result = directed.To(arg)
+		} else {
+			result = directed.From(arg)
+		}
+
+		for {
+			if next := result.Next(); !next {
+				break
+			}
+
+			if to {
+				ch <- directed.edges[directed.Edge(result.Node().ID(), arg)]
+			} else {
+				ch <- directed.edges[directed.Edge(arg, result.Node().ID())]
+			}
 		}
 	}()
 

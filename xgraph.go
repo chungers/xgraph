@@ -21,3 +21,12 @@ func NodeSlice(nodes Nodes) []Node {
 	}
 	return all
 }
+
+// EdgeSlice reads all the edges from the channel until closed and then returns the entire slice of edges collected.
+func EdgeSlice(edges Edges) []Edge {
+	all := []Edge{}
+	for n := range edges {
+		all = append(all, n)
+	}
+	return all
+}
