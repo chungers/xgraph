@@ -13,6 +13,7 @@ func newDirected() *directed {
 		DirectedBuilder: simple.NewDirectedGraph(),
 		nodes:           map[int64]Node{},
 		ids:             map[Node]int64{},
+		edges:           map[gonum.Edge]*edge{},
 	}
 }
 
@@ -20,6 +21,7 @@ type directed struct {
 	gonum.DirectedBuilder
 	nodes map[int64]Node // Map of gonum node ids to xgraph nodes, which may be a subset of all xgraph nodes
 	ids   map[Node]int64
+	edges map[gonum.Edge]*edge
 
 	lock sync.RWMutex
 }

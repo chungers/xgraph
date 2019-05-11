@@ -177,7 +177,7 @@ func TestGraphQueries(t *testing.T) {
 
 	g.Add(&nodeT{id: "David"})
 
-	m := 10
+	m := 1000
 	for i := 0; i < m*2; i++ {
 		this := &nodeT{id: fmt.Sprintf("LIKED-%v", i)}
 		g.Add(this)

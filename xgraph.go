@@ -13,14 +13,11 @@ func Reverse(n []Node) (out []Node) {
 	return
 }
 
+// NodeSlice reads all the nodes from the channel until closed and then returns the entire slice of nodes collected.
 func NodeSlice(nodes Nodes) []Node {
 	all := []Node{}
-	for {
-		if n, ok := <-nodes; !ok {
-			break
-		} else {
-			all = append(all, n)
-		}
+	for n := range nodes {
+		all = append(all, n)
 	}
 	return all
 }

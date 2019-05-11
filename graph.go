@@ -12,9 +12,10 @@ type node struct {
 }
 
 type edge struct {
-	from Node
-	to   Node
-	kind EdgeKind
+	from    Node
+	to      Node
+	kind    EdgeKind
+	context []interface{}
 }
 
 func (e *edge) Kind() EdgeKind {
@@ -25,6 +26,9 @@ func (e *edge) From() Node {
 }
 func (e *edge) To() Node {
 	return e.to
+}
+func (e *edge) Context() []interface{} {
+	return e.context
 }
 
 type graph struct {
@@ -80,7 +84,7 @@ func (g *graph) Node(k NodeKey) Node {
 	return g.nodeKeys[k]
 }
 
-func (g *graph) Associate(from Node, kind EdgeKind, to Node) (Edge, error) {
+func (g *graph) Associate(from Node, kind EdgeKind, to Node, optionalContext ...interface{}) (Edge, error) {
 	// first check for proper node membership
 	if !g.Has(from) {
 		return nil, ErrNoSuchNode{Node: from, context: "From"}
@@ -109,30 +113,35 @@ func (g *graph) Associate(from Node, kind EdgeKind, to Node) (Edge, error) {
 		tn = dg.add(to)
 	}
 
-	dg.SetEdge(dg.NewEdge(fn, tn))
+	new := dg.NewEdge(fn, tn)
+	dg.SetEdge(new)
 
-	return &edge{
-		kind: kind,
-		to:   to,
-		from: from,
-	}, nil
+	dg.edges[new] = &edge{
+		kind:    kind,
+		to:      to,
+		from:    from,
+		context: optionalContext,
+	}
+
+	return dg.edges[new], nil
 
 }
 
-func (g *graph) Edge(from Node, kind EdgeKind, to Node) bool {
+func (g *graph) Edge(from Node, kind EdgeKind, to Node) Edge {
 	g.lock.RLock()
 	defer g.lock.RUnlock()
 
 	directed, has := g.directed[kind]
 	if !has {
-		return false
+		return nil
 	}
 
 	args := directed.gonum(from, to)
 	if args[0] == nil || args[1] == nil {
-		return false
+		return nil
 	}
-	return directed.HasEdgeBetween(args[0].ID(), args[1].ID())
+
+	return directed.edges[directed.Edge(args[0].ID(), args[1].ID())]
 }
 
 func (g *graph) From(from Node, kind EdgeKind) (nodes Nodes) {

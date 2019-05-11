@@ -104,17 +104,19 @@ func TestAssociate(t *testing.T) {
 	likes := EdgeKind(1)
 	shares := EdgeKind(2)
 
-	_, err := g.Associate(A, likes, B)
+	_, err := g.Associate(A, likes, B, "some context", "something else")
 	require.NoError(t, err)
-	require.True(t, g.Edge(A, likes, B))
+	require.NotNil(t, g.Edge(A, likes, B))
+	require.Equal(t, []interface{}{"some context", "something else"}, g.Edge(A, likes, B).Context())
 
 	_, err = g.Associate(D, likes, A)
 	require.Error(t, err, "Expects error because D was not added to the graph.")
-	require.False(t, g.Edge(D, likes, A), "Expects false because C is not part of the graph.")
+	require.Nil(t, g.Edge(D, likes, A), "Expects false because C is not part of the graph.")
 
 	_, err = g.Associate(A, likes, C)
 	require.NoError(t, err, "No error because A and C are members of the graph.")
-	require.True(t, g.Edge(A, likes, C), "A likes C.")
-	require.False(t, g.Edge(C, shares, A), "Shares is not an association kind between A and B.")
+	require.NotNil(t, g.Edge(A, likes, C), "A likes C.")
+	require.Equal(t, 0, len(g.Edge(A, likes, C).Context()))
+	require.Nil(t, g.Edge(C, shares, A), "Shares is not an association kind between A and B.")
 
 }
