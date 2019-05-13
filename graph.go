@@ -6,10 +6,14 @@ import (
 	gonum "gonum.org/v1/gonum/graph"
 )
 
-type node struct {
-	Node
-	ids map[EdgeKind]int64
-}
+// type node struct {
+// 	Node
+// 	id int64 // gonum id
+// }
+
+// func (n *node) ID() int64 {
+// 	return n.id
+// }
 
 type edge struct {
 	from    Node
@@ -33,7 +37,6 @@ func (e *edge) Context() []interface{} {
 
 type graph struct {
 	Options
-	nodes    map[Node]interface{}
 	directed map[EdgeKind]*directed
 	nodeKeys map[interface{}]Node
 
@@ -43,7 +46,6 @@ type graph struct {
 func newGraph(options Options) *graph {
 	return &graph{
 		Options:  options,
-		nodes:    map[Node]interface{}{},
 		nodeKeys: map[interface{}]Node{},
 		directed: map[EdgeKind]*directed{},
 	}
@@ -59,7 +61,6 @@ func (g *graph) Add(n Node, other ...Node) error {
 	for _, add := range append([]Node{n}, other...) {
 		found, has := g.nodeKeys[add.NodeKey()]
 		if !has {
-			g.nodes[add] = &node{Node: add}
 			g.nodeKeys[add.NodeKey()] = add
 		} else if found != add {
 			return ErrDuplicateKey{add}
@@ -67,14 +68,6 @@ func (g *graph) Add(n Node, other ...Node) error {
 	}
 
 	return nil
-}
-
-func (g *graph) Has(n Node) bool {
-	g.lock.RLock()
-	defer g.lock.RUnlock()
-
-	_, has := g.nodes[n]
-	return has
 }
 
 func (g *graph) Node(k NodeKey) Node {
@@ -86,10 +79,10 @@ func (g *graph) Node(k NodeKey) Node {
 
 func (g *graph) Associate(from Node, kind EdgeKind, to Node, optionalContext ...interface{}) (Edge, error) {
 	// first check for proper node membership
-	if !g.Has(from) {
+	if g.Node(from.NodeKey()) == nil {
 		return nil, ErrNoSuchNode{Node: from, context: "From"}
 	}
-	if !g.Has(to) {
+	if g.Node(to.NodeKey()) == nil {
 		return nil, ErrNoSuchNode{Node: to, context: "To"}
 	}
 

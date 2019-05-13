@@ -35,7 +35,6 @@ type NodesOrEdges interface {
 }
 
 type Graph interface {
-	Has(Node) bool
 	Node(NodeKey) Node
 	Edge(from Node, kind EdgeKind, to Node) Edge
 	To(Node, EdgeKind) NodesOrEdges

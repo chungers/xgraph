@@ -8,6 +8,8 @@ import (
 	"gonum.org/v1/gonum/graph/topo"
 )
 
+type intNode int64
+
 func TestGonumGraph(t *testing.T) {
 
 	g := simple.NewDirectedGraph()
@@ -82,7 +84,7 @@ func TestAdd(t *testing.T) {
 	require.Error(t, g.Add(&nodeT{id: "A"}), "Not OK for duplicate key when struct identity fails")
 
 	for _, n := range []Node{plus, minus, A, B, C} {
-		require.True(t, g.Has(n))
+		require.NotNil(t, g.Node(n.NodeKey()))
 	}
 }
 
@@ -96,10 +98,10 @@ func TestAssociate(t *testing.T) {
 	g := Builder(Options{})
 	require.NoError(t, g.Add(A, B, C))
 
-	require.True(t, g.Has(A))
-	require.True(t, g.Has(B))
-	require.True(t, g.Has(C))
-	require.False(t, g.Has(D))
+	require.NotNil(t, g.Node(A.NodeKey()))
+	require.NotNil(t, g.Node(B.NodeKey()))
+	require.NotNil(t, g.Node(C.NodeKey()))
+	require.Nil(t, g.Node(D.NodeKey()))
 
 	likes := EdgeKind(1)
 	shares := EdgeKind(2)
