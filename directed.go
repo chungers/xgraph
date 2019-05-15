@@ -8,36 +8,24 @@ import (
 	"gonum.org/v1/gonum/graph/topo"
 )
 
-func newDirected() *directed {
+func newDirected(base *graph) *directed {
 	return &directed{
+		base:            base,
 		DirectedBuilder: simple.NewDirectedGraph(),
-		nodes:           map[int64]Node{},
-		ids:             map[Node]int64{},
 		edges:           map[gonum.Edge]*edge{},
 	}
 }
 
 type directed struct {
+	base *graph
 	gonum.DirectedBuilder
-	nodes map[int64]Node // Map of gonum node ids to xgraph nodes, which may be a subset of all xgraph nodes
-	ids   map[Node]int64
 	edges map[gonum.Edge]*edge
 
 	lock sync.RWMutex
 }
 
 func (d *directed) gonum(n Node, more ...Node) []gonum.Node {
-	d.lock.RLock()
-	defer d.lock.RUnlock()
-
-	all := append([]Node{n}, more...)
-	out := make([]gonum.Node, len(all))
-	for i, xn := range all {
-		if id, has := d.ids[xn]; has {
-			out[i] = d.Node(id)
-		}
-	}
-	return out
+	return d.base.gonum(n, more...)
 }
 
 func (d *directed) path(n gonum.Node, more ...gonum.Node) Path {
@@ -48,23 +36,11 @@ func (d *directed) path(n gonum.Node, more ...gonum.Node) Path {
 	out := make([]Node, len(all))
 
 	for i, gn := range all {
-		if xn, has := d.nodes[gn.ID()]; has {
-			out[i] = xn
+		if xn, ok := gn.(*node); ok {
+			out[i] = xn.Node
 		}
 	}
 	return out
-}
-
-func (d *directed) add(n Node) gonum.Node {
-	d.lock.Lock()
-	defer d.lock.Unlock()
-
-	gn := d.NewNode()
-	d.AddNode(gn)
-	id := gn.ID()
-	d.ids[n] = id
-	d.nodes[id] = n
-	return gn
 }
 
 func scopeDirected(g Graph, kind EdgeKind, do func(*directed) error) error {

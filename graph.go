@@ -4,16 +4,17 @@ import (
 	"sync"
 
 	gonum "gonum.org/v1/gonum/graph"
+	"gonum.org/v1/gonum/graph/simple"
 )
 
-// type node struct {
-// 	Node
-// 	id int64 // gonum id
-// }
+type node struct {
+	Node
+	id int64 // gonum id
+}
 
-// func (n *node) ID() int64 {
-// 	return n.id
-// }
+func (n *node) ID() int64 {
+	return n.id
+}
 
 type edge struct {
 	from    Node
@@ -36,19 +37,33 @@ func (e *edge) Context() []interface{} {
 }
 
 type graph struct {
+	gonum.Builder
 	Options
+
 	directed map[EdgeKind]*directed
-	nodeKeys map[interface{}]Node
+	nodeKeys map[interface{}]*node
 
 	lock sync.RWMutex
 }
 
 func newGraph(options Options) *graph {
 	return &graph{
+		Builder:  simple.NewUndirectedGraph(),
 		Options:  options,
-		nodeKeys: map[interface{}]Node{},
+		nodeKeys: map[interface{}]*node{},
 		directed: map[EdgeKind]*directed{},
 	}
+}
+
+func (g *graph) gonum(n Node, more ...Node) []gonum.Node {
+	all := append([]Node{n}, more...)
+	out := make([]gonum.Node, len(all))
+	for i, xn := range all {
+		if n, has := g.nodeKeys[xn.NodeKey()]; has {
+			out[i] = n
+		}
+	}
+	return out
 }
 
 /*
@@ -58,12 +73,18 @@ func (g *graph) Add(n Node, other ...Node) error {
 	g.lock.Lock()
 	defer g.lock.Unlock()
 
-	for _, add := range append([]Node{n}, other...) {
-		found, has := g.nodeKeys[add.NodeKey()]
+	all := append([]Node{n}, other...)
+	for i := range all {
+		found, has := g.nodeKeys[all[i].NodeKey()]
 		if !has {
-			g.nodeKeys[add.NodeKey()] = add
-		} else if found != add {
-			return ErrDuplicateKey{add}
+			newNode := &node{
+				Node: all[i],
+				id:   g.NewNode().ID(),
+			}
+			g.AddNode(newNode)
+			g.nodeKeys[all[i].NodeKey()] = newNode
+		} else if found.Node != all[i] {
+			return ErrDuplicateKey{all[i]}
 		}
 	}
 
@@ -78,11 +99,12 @@ func (g *graph) Node(k NodeKey) Node {
 }
 
 func (g *graph) Associate(from Node, kind EdgeKind, to Node, optionalContext ...interface{}) (Edge, error) {
-	// first check for proper node membership
-	if g.Node(from.NodeKey()) == nil {
+	fromNode := g.nodeKeys[from.NodeKey()]
+	if fromNode == nil {
 		return nil, ErrNoSuchNode{Node: from, context: "From"}
 	}
-	if g.Node(to.NodeKey()) == nil {
+	toNode := g.nodeKeys[to.NodeKey()]
+	if toNode == nil {
 		return nil, ErrNoSuchNode{Node: to, context: "To"}
 	}
 
@@ -91,22 +113,19 @@ func (g *graph) Associate(from Node, kind EdgeKind, to Node, optionalContext ...
 
 	// add a new graph builder if this is a new kind
 	if _, has := g.directed[kind]; !has {
-		g.directed[kind] = newDirected()
+		g.directed[kind] = newDirected(g)
 	}
 
 	dg := g.directed[kind]
 
-	fn := dg.gonum(from)[0]
-	if fn == nil {
-		fn = dg.add(from)
+	if dg.Node(fromNode.id) == nil {
+		dg.AddNode(fromNode)
+	}
+	if dg.Node(toNode.id) == nil {
+		dg.AddNode(toNode)
 	}
 
-	tn := dg.gonum(to)[0]
-	if tn == nil {
-		tn = dg.add(to)
-	}
-
-	new := dg.NewEdge(fn, tn)
+	new := dg.NewEdge(fromNode, toNode)
 	dg.SetEdge(new)
 
 	dg.edges[new] = &edge{
@@ -177,7 +196,7 @@ func (g *graph) find(kind EdgeKind, x Node, to bool) (nodes Nodes) {
 		return
 	}
 
-	arg, has := directed.ids[x]
+	arg, has := g.nodeKeys[x.NodeKey()]
 	if !has {
 		close(ch)
 		return
@@ -188,16 +207,16 @@ func (g *graph) find(kind EdgeKind, x Node, to bool) (nodes Nodes) {
 
 		var result gonum.Nodes
 		if to {
-			result = directed.To(arg)
+			result = directed.To(arg.ID())
 		} else {
-			result = directed.From(arg)
+			result = directed.From(arg.ID())
 		}
 
 		for {
 			if next := result.Next(); !next {
 				break
 			}
-			ch <- directed.nodes[result.Node().ID()]
+			ch <- result.Node().(*node).Node
 		}
 	}()
 
@@ -217,7 +236,7 @@ func (g *graph) findEdges(kind EdgeKind, x Node, to bool) (edges Edges) {
 		return
 	}
 
-	arg, has := directed.ids[x]
+	arg, has := g.nodeKeys[x.NodeKey()]
 	if !has {
 		close(ch)
 		return
@@ -228,9 +247,9 @@ func (g *graph) findEdges(kind EdgeKind, x Node, to bool) (edges Edges) {
 
 		var result gonum.Nodes
 		if to {
-			result = directed.To(arg)
+			result = directed.To(arg.ID())
 		} else {
-			result = directed.From(arg)
+			result = directed.From(arg.ID())
 		}
 
 		for {
@@ -239,9 +258,9 @@ func (g *graph) findEdges(kind EdgeKind, x Node, to bool) (edges Edges) {
 			}
 
 			if to {
-				ch <- directed.edges[directed.Edge(result.Node().ID(), arg)]
+				ch <- directed.edges[directed.Edge(result.Node().ID(), arg.ID())]
 			} else {
-				ch <- directed.edges[directed.Edge(arg, result.Node().ID())]
+				ch <- directed.edges[directed.Edge(arg.ID(), result.Node().ID())]
 			}
 		}
 	}()

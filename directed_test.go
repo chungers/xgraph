@@ -58,11 +58,11 @@ func TestScopeDirected(t *testing.T) {
 		func(dg *directed) error {
 			require.NotNil(t, dg)
 
-			count = len(dg.nodes)
+			count = len(dg.edges)
 			return nil
 		})
 	require.NoError(t, err)
-	require.Equal(t, 2, count)
+	require.Equal(t, 1, count)
 }
 
 func TestDirectedCycles(t *testing.T) {

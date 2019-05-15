@@ -80,8 +80,8 @@ func TestAdd(t *testing.T) {
 	g := Builder(Options{})
 	require.NoError(t, g.Add(A, B, C, plus, minus))
 
-	require.NoError(t, g.Add(A), "Idempotent: same node by identity")
 	require.Error(t, g.Add(&nodeT{id: "A"}), "Not OK for duplicate key when struct identity fails")
+	require.NoError(t, g.Add(A), "Idempotent: same node by identity")
 
 	for _, n := range []Node{plus, minus, A, B, C} {
 		require.NotNil(t, g.Node(n.NodeKey()))
