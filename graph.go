@@ -37,7 +37,7 @@ func (e *edge) Context() []interface{} {
 }
 
 type graph struct {
-	gonum.Builder
+	gonum.Builder // tracks nodes used for all directed graphs
 	Options
 
 	directed map[EdgeKind]*directed
@@ -55,12 +55,29 @@ func newGraph(options Options) *graph {
 	}
 }
 
+type nodeConverter interface {
+	gonum(n Node, more ...Node) []gonum.Node
+	xgraph(n gonum.Node, more ...gonum.Node) []Node
+}
+
 func (g *graph) gonum(n Node, more ...Node) []gonum.Node {
 	all := append([]Node{n}, more...)
 	out := make([]gonum.Node, len(all))
 	for i, xn := range all {
 		if n, has := g.nodeKeys[xn.NodeKey()]; has {
 			out[i] = n
+		}
+	}
+	return out
+}
+
+func (g *graph) xgraph(n gonum.Node, more ...gonum.Node) []Node {
+	all := append([]gonum.Node{n}, more...)
+	out := make([]Node, len(all))
+
+	for i, gn := range all {
+		if xn, ok := gn.(*node); ok {
+			out[i] = xn.Node
 		}
 	}
 	return out
@@ -113,30 +130,10 @@ func (g *graph) Associate(from Node, kind EdgeKind, to Node, optionalContext ...
 
 	// add a new graph builder if this is a new kind
 	if _, has := g.directed[kind]; !has {
-		g.directed[kind] = newDirected(g)
+		g.directed[kind] = newDirected(g, kind)
 	}
 
-	dg := g.directed[kind]
-
-	if dg.Node(fromNode.id) == nil {
-		dg.AddNode(fromNode)
-	}
-	if dg.Node(toNode.id) == nil {
-		dg.AddNode(toNode)
-	}
-
-	new := dg.NewEdge(fromNode, toNode)
-	dg.SetEdge(new)
-
-	dg.edges[new] = &edge{
-		kind:    kind,
-		to:      to,
-		from:    from,
-		context: optionalContext,
-	}
-
-	return dg.edges[new], nil
-
+	return g.directed[kind].associate(fromNode, toNode, optionalContext...), nil
 }
 
 func (g *graph) Edge(from Node, kind EdgeKind, to Node) Edge {

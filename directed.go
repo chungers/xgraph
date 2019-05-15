@@ -8,39 +8,46 @@ import (
 	"gonum.org/v1/gonum/graph/topo"
 )
 
-func newDirected(base *graph) *directed {
+func newDirected(base *graph, kind EdgeKind) *directed {
 	return &directed{
-		base:            base,
+		kind:            kind,
+		nodeConverter:   base,
 		DirectedBuilder: simple.NewDirectedGraph(),
 		edges:           map[gonum.Edge]*edge{},
 	}
 }
 
 type directed struct {
-	base *graph
+	nodeConverter
 	gonum.DirectedBuilder
 	edges map[gonum.Edge]*edge
+	kind  EdgeKind
 
 	lock sync.RWMutex
 }
 
-func (d *directed) gonum(n Node, more ...Node) []gonum.Node {
-	return d.base.gonum(n, more...)
-}
+func (d *directed) associate(fromNode, toNode *node, optionalContext ...interface{}) *edge {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 
-func (d *directed) path(n gonum.Node, more ...gonum.Node) Path {
-	d.lock.RLock()
-	defer d.lock.RUnlock()
-
-	all := append([]gonum.Node{n}, more...)
-	out := make([]Node, len(all))
-
-	for i, gn := range all {
-		if xn, ok := gn.(*node); ok {
-			out[i] = xn.Node
-		}
+	if d.Node(fromNode.id) == nil {
+		d.AddNode(fromNode)
 	}
-	return out
+	if d.Node(toNode.id) == nil {
+		d.AddNode(toNode)
+	}
+
+	new := d.NewEdge(fromNode, toNode)
+	d.SetEdge(new)
+
+	ed := &edge{
+		kind:    d.kind,
+		to:      toNode.Node,
+		from:    fromNode.Node,
+		context: optionalContext,
+	}
+	d.edges[new] = ed
+	return ed
 }
 
 func scopeDirected(g Graph, kind EdgeKind, do func(*directed) error) error {
@@ -63,7 +70,7 @@ func DirectedCycles(g Graph, kind EdgeKind) (cycles []Path, err error) {
 		func(dg *directed) error {
 			cycles = []Path{}
 			for _, cycle := range topo.DirectedCyclesIn(dg) {
-				cycles = append(cycles, dg.path(cycle[0], cycle[1:]...))
+				cycles = append(cycles, dg.xgraph(cycle[0], cycle[1:]...))
 			}
 			return nil
 		})
@@ -80,7 +87,7 @@ func DirectedSort(g Graph, kind EdgeKind) (sorted []Node, err error) {
 				return err
 			}
 
-			sorted = dg.path(s[0], s[1:]...)
+			sorted = dg.xgraph(s[0], s[1:]...)
 			return nil
 		})
 	return

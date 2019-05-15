@@ -29,8 +29,8 @@ func TestPaths(t *testing.T) {
 		require.NotNil(t, gn[i])
 	}
 
-	nn := g.(*graph).directed[refs].path(gn[0], gn[1:]...)
-	require.Equal(t, Path{A, B, C, D}, nn)
+	nn := g.(*graph).directed[refs].xgraph(gn[0], gn[1:]...)
+	require.Equal(t, Path{A, B, C, D}, Path(nn))
 
 	cycles, err := DirectedCycles(g, refs)
 	require.NoError(t, err)
