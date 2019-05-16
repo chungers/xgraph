@@ -1,6 +1,7 @@
 package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
+	"fmt"
 	"sync"
 
 	gonum "gonum.org/v1/gonum/graph"
@@ -14,6 +15,10 @@ type node struct {
 
 func (n *node) ID() int64 {
 	return n.id
+}
+
+func (n *node) String() string {
+	return fmt.Sprintf("%v@%d", n.NodeKey(), n.id)
 }
 
 type edge struct {
