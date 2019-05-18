@@ -2,9 +2,11 @@ package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	gonum "gonum.org/v1/gonum/graph"
+	"gonum.org/v1/gonum/graph/encoding"
 	"gonum.org/v1/gonum/graph/simple"
 )
 
@@ -21,7 +23,18 @@ func (n *node) String() string {
 	return fmt.Sprintf("%v@%d", n.NodeKey(), n.id)
 }
 
+func (n *node) label() string {
+	return fmt.Sprintf("%v", n.NodeKey())
+}
+
+func (n *node) Attributes() []encoding.Attribute {
+	return attributes{
+		"label": n.label(),
+	}.Attributes()
+}
+
 type edge struct {
+	gonum.Edge
 	from    Node
 	to      Node
 	kind    EdgeKind
@@ -31,18 +44,36 @@ type edge struct {
 func (e *edge) Kind() EdgeKind {
 	return e.kind
 }
-func (e *edge) From() Node {
-	return e.from
+
+func (e *edge) Vec() []Node {
+	return []Node{e.from, e.to}
 }
-func (e *edge) To() Node {
-	return e.to
-}
+
 func (e *edge) Context() []interface{} {
 	return e.context
 }
 
+func (e *edge) label() string {
+	if len(e.context) > 0 {
+		s := make([]string, len(e.context))
+		for i := range e.context {
+			s[i] = fmt.Sprintf("%v", e.context[i])
+		}
+		return strings.Join(s, ",")
+	}
+	return ""
+}
+
+func (e *edge) Attributes() []encoding.Attribute {
+	attr := attributes{}
+	if l := e.label(); l != "" {
+		attr["label"] = l
+	}
+	return attr.Attributes()
+}
+
 type graph struct {
-	gonum.Builder // tracks nodes used for all directed graphs
+	gonum.DirectedBuilder // tracks nodes used for all directed graphs
 	Options
 
 	directed map[EdgeKind]*directed
@@ -53,10 +84,10 @@ type graph struct {
 
 func newGraph(options Options) *graph {
 	return &graph{
-		Builder:  simple.NewUndirectedGraph(),
-		Options:  options,
-		nodeKeys: map[interface{}]*node{},
-		directed: map[EdgeKind]*directed{},
+		DirectedBuilder: simple.NewDirectedGraph(),
+		Options:         options,
+		nodeKeys:        map[interface{}]*node{},
+		directed:        map[EdgeKind]*directed{},
 	}
 }
 

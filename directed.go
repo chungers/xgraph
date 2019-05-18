@@ -38,15 +38,16 @@ func (d *directed) associate(fromNode, toNode *node, optionalContext ...interfac
 	}
 
 	new := d.NewEdge(fromNode, toNode)
-	d.SetEdge(new)
 
 	ed := &edge{
+		Edge:    new,
 		kind:    d.kind,
 		to:      toNode.Node,
 		from:    fromNode.Node,
 		context: optionalContext,
 	}
 	d.edges[new] = ed
+	d.SetEdge(ed)
 	return ed
 }
 

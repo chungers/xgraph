@@ -11,8 +11,7 @@ type EdgeKind interface{}
 
 type Edge interface {
 	Kind() EdgeKind
-	From() Node
-	To() Node
+	Vec() []Node // {from, to}
 	Context() []interface{}
 }
 
