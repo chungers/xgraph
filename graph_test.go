@@ -106,9 +106,16 @@ func TestAssociate(t *testing.T) {
 	likes := EdgeKind(1)
 	shares := EdgeKind(2)
 
-	_, err := g.Associate(A, likes, B, "some context", "something else")
+	ev, err := g.Associate(A, likes, B, "some context", "something else")
 	require.NoError(t, err)
 	require.NotNil(t, g.Edge(A, likes, B))
+	require.NotNil(t, ev)
+	require.Equal(t, A, ev.From())
+	require.Equal(t, B, ev.To())
+	require.Equal(t, []interface{}{"some context", "something else"}, ev.Context())
+
+	require.Equal(t, A, g.Edge(A, likes, B).From())
+	require.Equal(t, B, g.Edge(A, likes, B).To())
 	require.Equal(t, []interface{}{"some context", "something else"}, g.Edge(A, likes, B).Context())
 
 	_, err = g.Associate(D, likes, A)
@@ -123,11 +130,11 @@ func TestAssociate(t *testing.T) {
 
 	require.Equal(t, 2, len(EdgeSlice(g.From(A, likes).Edges())))
 	require.Equal(t, 1, len(EdgeSlice(g.To(B, likes).Edges())))
-	require.Equal(t, "A", EdgeSlice(g.To(B, likes).Edges())[0].Vec()[0].NodeKey())
-	require.Equal(t, "B", EdgeSlice(g.To(B, likes).Edges())[0].Vec()[1].NodeKey())
+	require.Equal(t, "A", EdgeSlice(g.To(B, likes).Edges())[0].From().NodeKey())
+	require.Equal(t, "B", EdgeSlice(g.To(B, likes).Edges())[0].To().NodeKey())
 	require.Equal(t, 1, len(EdgeSlice(g.To(C, likes).Edges())))
-	require.Equal(t, "A", EdgeSlice(g.To(C, likes).Edges())[0].Vec()[0].NodeKey())
-	require.Equal(t, "C", EdgeSlice(g.To(C, likes).Edges())[0].Vec()[1].NodeKey())
+	require.Equal(t, "A", EdgeSlice(g.To(C, likes).Edges())[0].From().NodeKey())
+	require.Equal(t, "C", EdgeSlice(g.To(C, likes).Edges())[0].To().NodeKey())
 	require.Equal(t, 0, len(EdgeSlice(g.From(B, likes).Edges())))
 	require.Equal(t, 0, len(EdgeSlice(g.From(C, likes).Edges())))
 	require.Equal(t, 0, len(EdgeSlice(g.To(A, likes).Edges())), "D was not added")

@@ -1,76 +1,11 @@
 package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
-	"fmt"
-	"strings"
 	"sync"
 
 	gonum "gonum.org/v1/gonum/graph"
-	"gonum.org/v1/gonum/graph/encoding"
 	"gonum.org/v1/gonum/graph/simple"
 )
-
-type node struct {
-	Node
-	id int64 // gonum id
-}
-
-func (n *node) ID() int64 {
-	return n.id
-}
-
-func (n *node) String() string {
-	return fmt.Sprintf("%v@%d", n.NodeKey(), n.id)
-}
-
-func (n *node) label() string {
-	return fmt.Sprintf("%v", n.NodeKey())
-}
-
-func (n *node) Attributes() []encoding.Attribute {
-	return attributes{
-		"label": n.label(),
-	}.Attributes()
-}
-
-type edge struct {
-	gonum.Edge
-	from    Node
-	to      Node
-	kind    EdgeKind
-	context []interface{}
-}
-
-func (e *edge) Kind() EdgeKind {
-	return e.kind
-}
-
-func (e *edge) Vec() []Node {
-	return []Node{e.from, e.to}
-}
-
-func (e *edge) Context() []interface{} {
-	return e.context
-}
-
-func (e *edge) label() string {
-	if len(e.context) > 0 {
-		s := make([]string, len(e.context))
-		for i := range e.context {
-			s[i] = fmt.Sprintf("%v", e.context[i])
-		}
-		return strings.Join(s, ",")
-	}
-	return ""
-}
-
-func (e *edge) Attributes() []encoding.Attribute {
-	attr := attributes{}
-	if l := e.label(); l != "" {
-		attr["label"] = l
-	}
-	return attr.Attributes()
-}
 
 type graph struct {
 	gonum.DirectedBuilder // tracks nodes used for all directed graphs
@@ -186,20 +121,7 @@ func (g *graph) Edge(from Node, kind EdgeKind, to Node) Edge {
 		return nil
 	}
 
-	return directed.edges[directed.Edge(args[0].ID(), args[1].ID())]
-}
-
-type nodesOrEdges struct {
-	nodes func() Nodes
-	edges func() Edges
-}
-
-func (q *nodesOrEdges) Nodes() Nodes {
-	return q.nodes()
-}
-
-func (q *nodesOrEdges) Edges() Edges {
-	return q.edges()
+	return &edgeView{directed.edges[directed.Edge(args[0].ID(), args[1].ID())]}
 }
 
 func (g *graph) From(from Node, kind EdgeKind) NodesOrEdges {
@@ -291,9 +213,9 @@ func (g *graph) findEdges(kind EdgeKind, x Node, to bool) (edges Edges) {
 			}
 
 			if to {
-				ch <- directed.edges[directed.Edge(result.Node().ID(), arg.ID())]
+				ch <- &edgeView{directed.edges[directed.Edge(result.Node().ID(), arg.ID())]}
 			} else {
-				ch <- directed.edges[directed.Edge(arg.ID(), result.Node().ID())]
+				ch <- &edgeView{directed.edges[directed.Edge(arg.ID(), result.Node().ID())]}
 			}
 		}
 	}()
