@@ -1,7 +1,6 @@
 package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
-	"fmt"
 	"strings"
 
 	gonum "gonum.org/v1/gonum/graph"
@@ -17,14 +16,19 @@ type edge struct {
 }
 
 func (e *edge) label() string {
-	if len(e.context) > 0 {
-		s := make([]string, len(e.context))
-		for i := range e.context {
-			s[i] = fmt.Sprintf("%v", e.context[i])
+
+	labels := []string{}
+	for i := range e.context {
+
+		switch v := e.context[i].(type) {
+		case func(Edge) string:
+			labels = append(labels, v(&edgeView{e}))
+		case EdgeLabeler:
+			labels = append(labels, v(&edgeView{e}))
 		}
-		return strings.Join(s, ",")
+
 	}
-	return ""
+	return strings.Join(labels, ",")
 }
 
 func (e *edge) Attributes() []encoding.Attribute {
@@ -51,7 +55,7 @@ func (e *edgeView) From() Node {
 }
 
 func (e *edgeView) Context() []interface{} {
-	return e.edge.context
+	return e.context
 }
 
 func (e *edgeView) Kind() EdgeKind {

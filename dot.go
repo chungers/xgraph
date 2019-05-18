@@ -8,30 +8,6 @@ import (
 	"gonum.org/v1/gonum/graph/encoding/dot"
 )
 
-type NodeShape string
-type EdgeColor string
-
-const (
-	NodeShapeBox    NodeShape = "box"
-	NodeShapeCircle           = "circle"
-	NodeShapeOval             = "oval"
-	NodeShapeRecord           = "record"
-
-	EdgeColorBlack EdgeColor = "black"
-	EdgeColorRed             = "red"
-	EdgeColorBlue            = "blue"
-	EdgeColorGreen           = "green"
-)
-
-type DotOptions struct {
-	Name       string
-	Prefix     string
-	Indent     string
-	NodeShape  NodeShape
-	Edges      map[EdgeKind]string
-	EdgeColors map[EdgeKind]EdgeColor
-}
-
 type dotSubgraph struct {
 	*directed
 	DotOptions
