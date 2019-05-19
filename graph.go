@@ -54,6 +54,15 @@ func (g *graph) xgraph(n gonum.Node, more ...gonum.Node) []Node {
 	return out
 }
 
+func (g *graph) setLabelers(l NodeLabeler) int {
+	count := 0
+	for _, n := range g.nodeKeys {
+		n.labeler = l
+		count++
+	}
+	return count
+}
+
 /*
  Add registers the given Nodes to the graph.  Duplicate key but with different identity is not allowed.
 */

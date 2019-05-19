@@ -58,7 +58,8 @@ func TestGonumGraph(t *testing.T) {
 }
 
 type nodeT struct {
-	id string
+	id     string
+	custom interface{}
 }
 
 func (n *nodeT) NodeKey() NodeKey {

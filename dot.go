@@ -102,6 +102,48 @@ func RenderDot(g Graph, options DotOptions) ([]byte, error) {
 		return nil, ErrNotSupported{g}
 	}
 
+	// Set any EdgeLabelers to customize labels for Edges
+	count := 0
+	for edg, labeler := range options.EdgeLabelers {
+		if ev, is := edg.(*edgeView); is {
+			ev.labeler = labeler
+			count++
+		}
+	}
+	if count > 0 {
+		defer func() {
+			// reset the labeler so we don't interfere with future renders
+			for edg := range options.EdgeLabelers {
+				if ev, is := edg.(*edgeView); is {
+					ev.labeler = nil
+				}
+			}
+		}()
+	}
+
+	// Set any NodeLabelers to customize labels for Nodes
+	count = 0
+
+	// Check if a global labeler is set
+	if labeler, has := options.NodeLabelers[nil]; has {
+		count = xg.setLabelers(labeler)
+	}
+	for n, labeler := range options.NodeLabelers {
+		if n != nil {
+			if v := g.Node(n.NodeKey()); v != nil {
+				if xn, is := v.(*node); is {
+					xn.labeler = labeler
+					count++
+				}
+			}
+		}
+	}
+	if count > 0 {
+		defer func() {
+			xg.setLabelers(nil)
+		}()
+	}
+
 	dg := &dotGraph{
 		DotOptions: options,
 		Directed:   xg.DirectedBuilder,

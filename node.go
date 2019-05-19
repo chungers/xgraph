@@ -9,6 +9,8 @@ import (
 type node struct {
 	Node
 	id int64 // gonum id
+
+	labeler NodeLabeler
 }
 
 func (n *node) ID() int64 {
@@ -20,13 +22,20 @@ func (n *node) String() string {
 }
 
 func (n *node) label() string {
+	if n.labeler != nil {
+		return n.labeler(n.Node)
+	}
 	return fmt.Sprintf("%v", n.NodeKey())
 }
 
 func (n *node) Attributes() []encoding.Attribute {
-	return attributes{
-		"label": n.label(),
-	}.Attributes()
+	attr := attributes{}
+
+	if l := n.label(); l != "" {
+		attr["label"] = l
+	}
+
+	return attr.Attributes()
 }
 
 type nodesOrEdges struct {

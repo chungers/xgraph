@@ -13,9 +13,14 @@ type edge struct {
 	to      Node
 	kind    EdgeKind
 	context []interface{}
+
+	labeler EdgeLabeler
 }
 
 func (e *edge) label() string {
+	if e.labeler != nil {
+		return e.labeler(&edgeView{e})
+	}
 
 	labels := []string{}
 	for i := range e.context {

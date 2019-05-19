@@ -5,16 +5,19 @@ type Node interface {
 	NodeKey() NodeKey
 }
 
+type Contexter interface {
+	Context() []interface{}
+}
+
 type Path []Node
 
 type EdgeKind interface{}
 
 type Edge interface {
+	Contexter
 	Kind() EdgeKind
-	//	Vec() []Node // {from, to}
 	To() Node
 	From() Node
-	Context() []interface{}
 }
 
 type Options struct {
@@ -58,12 +61,16 @@ const (
 )
 
 type DotOptions struct {
-	Name       string
-	Prefix     string
-	Indent     string
-	NodeShape  NodeShape
-	Edges      map[EdgeKind]string
-	EdgeColors map[EdgeKind]EdgeColor
+	Name      string
+	Prefix    string
+	Indent    string
+	NodeShape NodeShape
+
+	Edges        map[EdgeKind]string
+	EdgeColors   map[EdgeKind]EdgeColor
+	EdgeLabelers map[Edge]EdgeLabeler
+	NodeLabelers map[Node]NodeLabeler
 }
 
 type EdgeLabeler func(Edge) string
+type NodeLabeler func(Node) string
