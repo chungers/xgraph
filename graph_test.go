@@ -8,6 +8,8 @@ import (
 	"gonum.org/v1/gonum/graph/topo"
 )
 
+type intNode int64
+
 func TestGonumGraph(t *testing.T) {
 
 	g := simple.NewDirectedGraph()
@@ -56,7 +58,8 @@ func TestGonumGraph(t *testing.T) {
 }
 
 type nodeT struct {
-	id string
+	id     string
+	custom interface{}
 }
 
 func (n *nodeT) NodeKey() NodeKey {
@@ -78,11 +81,11 @@ func TestAdd(t *testing.T) {
 	g := Builder(Options{})
 	require.NoError(t, g.Add(A, B, C, plus, minus))
 
-	require.NoError(t, g.Add(A), "Idempotent: same node by identity")
 	require.Error(t, g.Add(&nodeT{id: "A"}), "Not OK for duplicate key when struct identity fails")
+	require.NoError(t, g.Add(A), "Idempotent: same node by identity")
 
 	for _, n := range []Node{plus, minus, A, B, C} {
-		require.True(t, g.Has(n))
+		require.NotNil(t, g.Node(n.NodeKey()))
 	}
 }
 
@@ -96,25 +99,46 @@ func TestAssociate(t *testing.T) {
 	g := Builder(Options{})
 	require.NoError(t, g.Add(A, B, C))
 
-	require.True(t, g.Has(A))
-	require.True(t, g.Has(B))
-	require.True(t, g.Has(C))
-	require.False(t, g.Has(D))
+	require.NotNil(t, g.Node(A.NodeKey()))
+	require.NotNil(t, g.Node(B.NodeKey()))
+	require.NotNil(t, g.Node(C.NodeKey()))
+	require.Nil(t, g.Node(D.NodeKey()))
 
 	likes := EdgeKind(1)
 	shares := EdgeKind(2)
 
-	_, err := g.Associate(A, likes, B)
+	ev, err := g.Associate(A, likes, B, "some context", "something else")
 	require.NoError(t, err)
-	require.True(t, g.Edge(A, likes, B))
+	require.NotNil(t, g.Edge(A, likes, B))
+	require.NotNil(t, ev)
+	require.Equal(t, A, ev.From())
+	require.Equal(t, B, ev.To())
+	require.Equal(t, []interface{}{"some context", "something else"}, ev.Context())
+
+	require.Equal(t, A, g.Edge(A, likes, B).From())
+	require.Equal(t, B, g.Edge(A, likes, B).To())
+	require.Equal(t, []interface{}{"some context", "something else"}, g.Edge(A, likes, B).Context())
 
 	_, err = g.Associate(D, likes, A)
 	require.Error(t, err, "Expects error because D was not added to the graph.")
-	require.False(t, g.Edge(D, likes, A), "Expects false because C is not part of the graph.")
+	require.Nil(t, g.Edge(D, likes, A), "Expects false because C is not part of the graph.")
 
 	_, err = g.Associate(A, likes, C)
 	require.NoError(t, err, "No error because A and C are members of the graph.")
-	require.True(t, g.Edge(A, likes, C), "A likes C.")
-	require.False(t, g.Edge(C, shares, A), "Shares is not an association kind between A and B.")
+	require.NotNil(t, g.Edge(A, likes, C), "A likes C.")
+	require.Equal(t, 0, len(g.Edge(A, likes, C).Context()))
+	require.Nil(t, g.Edge(C, shares, A), "Shares is not an association kind between A and B.")
+
+	require.Equal(t, 2, len(EdgeSlice(g.From(A, likes).Edges())))
+	require.Equal(t, 1, len(EdgeSlice(g.To(B, likes).Edges())))
+	require.Equal(t, "A", EdgeSlice(g.To(B, likes).Edges())[0].From().NodeKey())
+	require.Equal(t, "B", EdgeSlice(g.To(B, likes).Edges())[0].To().NodeKey())
+	require.Equal(t, 1, len(EdgeSlice(g.To(C, likes).Edges())))
+	require.Equal(t, "A", EdgeSlice(g.To(C, likes).Edges())[0].From().NodeKey())
+	require.Equal(t, "C", EdgeSlice(g.To(C, likes).Edges())[0].To().NodeKey())
+	require.Equal(t, 0, len(EdgeSlice(g.From(B, likes).Edges())))
+	require.Equal(t, 0, len(EdgeSlice(g.From(C, likes).Edges())))
+	require.Equal(t, 0, len(EdgeSlice(g.To(A, likes).Edges())), "D was not added")
+	require.Equal(t, 0, len(EdgeSlice(g.From(D, likes).Edges())), "D was not added")
 
 }

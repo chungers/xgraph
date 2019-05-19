@@ -29,8 +29,8 @@ func TestPaths(t *testing.T) {
 		require.NotNil(t, gn[i])
 	}
 
-	nn := g.(*graph).directed[refs].path(gn[0], gn[1:]...)
-	require.Equal(t, Path{A, B, C, D}, nn)
+	nn := g.(*graph).directed[refs].xgraph(gn[0], gn[1:]...)
+	require.Equal(t, Path{A, B, C, D}, Path(nn))
 
 	cycles, err := DirectedCycles(g, refs)
 	require.NoError(t, err)
@@ -58,11 +58,11 @@ func TestScopeDirected(t *testing.T) {
 		func(dg *directed) error {
 			require.NotNil(t, dg)
 
-			count = len(dg.nodes)
+			count = len(dg.edges)
 			return nil
 		})
 	require.NoError(t, err)
-	require.Equal(t, 2, count)
+	require.Equal(t, 1, count)
 }
 
 func TestDirectedCycles(t *testing.T) {
@@ -177,7 +177,7 @@ func TestGraphQueries(t *testing.T) {
 
 	g.Add(&nodeT{id: "David"})
 
-	m := 10
+	m := 1000
 	for i := 0; i < m*2; i++ {
 		this := &nodeT{id: fmt.Sprintf("LIKED-%v", i)}
 		g.Add(this)
@@ -190,6 +190,6 @@ func TestGraphQueries(t *testing.T) {
 		g.Associate(that, likes, g.Node(NodeKey("David")))
 	}
 
-	require.Equal(t, m, len(NodeSlice(g.To(g.Node("David"), likes))))
-	require.Equal(t, m*2, len(NodeSlice(g.From(g.Node("David"), likes))))
+	require.Equal(t, m, len(NodeSlice(g.To(g.Node("David"), likes).Nodes())))
+	require.Equal(t, m*2, len(NodeSlice(g.From(g.Node("David"), likes).Nodes())))
 }
