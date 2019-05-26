@@ -39,14 +39,14 @@ func (n *node) Attributes() []encoding.Attribute {
 }
 
 type nodesOrEdges struct {
-	nodes func() Nodes
-	edges func() Edges
+	nodes func([]func(Node) bool) Nodes
+	edges func([]func(Edge) bool) Edges
 }
 
-func (q *nodesOrEdges) Nodes() Nodes {
-	return q.nodes()
+func (q *nodesOrEdges) Nodes(optional ...func(Node) bool) Nodes {
+	return q.nodes(optional)
 }
 
-func (q *nodesOrEdges) Edges() Edges {
-	return q.edges()
+func (q *nodesOrEdges) Edges(optional ...func(Edge) bool) Edges {
+	return q.edges(optional)
 }

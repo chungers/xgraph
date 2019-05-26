@@ -190,6 +190,6 @@ func TestGraphQueries(t *testing.T) {
 		g.Associate(that, likes, g.Node(NodeKey("David")))
 	}
 
-	require.Equal(t, m, len(NodeSlice(g.To(g.Node("David"), likes).Nodes())))
+	require.Equal(t, m, len(NodeSlice(g.To(likes, g.Node("David")).Nodes())))
 	require.Equal(t, m*2, len(NodeSlice(g.From(g.Node("David"), likes).Nodes())))
 }

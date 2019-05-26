@@ -130,15 +130,15 @@ func TestAssociate(t *testing.T) {
 	require.Nil(t, g.Edge(C, shares, A), "Shares is not an association kind between A and B.")
 
 	require.Equal(t, 2, len(EdgeSlice(g.From(A, likes).Edges())))
-	require.Equal(t, 1, len(EdgeSlice(g.To(B, likes).Edges())))
-	require.Equal(t, "A", EdgeSlice(g.To(B, likes).Edges())[0].From().NodeKey())
-	require.Equal(t, "B", EdgeSlice(g.To(B, likes).Edges())[0].To().NodeKey())
-	require.Equal(t, 1, len(EdgeSlice(g.To(C, likes).Edges())))
-	require.Equal(t, "A", EdgeSlice(g.To(C, likes).Edges())[0].From().NodeKey())
-	require.Equal(t, "C", EdgeSlice(g.To(C, likes).Edges())[0].To().NodeKey())
+	require.Equal(t, 1, len(EdgeSlice(g.To(likes, B).Edges())))
+	require.Equal(t, "A", EdgeSlice(g.To(likes, B).Edges())[0].From().NodeKey())
+	require.Equal(t, "B", EdgeSlice(g.To(likes, B).Edges())[0].To().NodeKey())
+	require.Equal(t, 1, len(EdgeSlice(g.To(likes, C).Edges())))
+	require.Equal(t, "A", EdgeSlice(g.To(likes, C).Edges())[0].From().NodeKey())
+	require.Equal(t, "C", EdgeSlice(g.To(likes, C).Edges())[0].To().NodeKey())
 	require.Equal(t, 0, len(EdgeSlice(g.From(B, likes).Edges())))
 	require.Equal(t, 0, len(EdgeSlice(g.From(C, likes).Edges())))
-	require.Equal(t, 0, len(EdgeSlice(g.To(A, likes).Edges())), "D was not added")
+	require.Equal(t, 0, len(EdgeSlice(g.To(likes, A).Edges())), "D was not added")
 	require.Equal(t, 0, len(EdgeSlice(g.From(D, likes).Edges())), "D was not added")
 
 }

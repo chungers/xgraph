@@ -19,16 +19,34 @@ func testDataVpc(t *testing.T) Graph {
 
 	g.Add(VPC)
 
+	g.Add(&nodeT{id: "sg1"}, &nodeT{id: "sg2"})
+
 	az := []string{"az1", "az2"}
 
-	subnets := []*nodeT{}
+	// Technique here uses embedded types to mark the different nodes types
+	// this will make it easy to look for to/from nodes of certain types after the edge is known.
+	type subnet_t struct {
+		*nodeT
+	}
+
+	type host_t struct {
+		*nodeT
+	}
+
+	type device_t struct {
+		*nodeT
+	}
+
+	subnets := []*subnet_t{}
 	for i := 0; i < 4; i++ {
 
-		subnet := &nodeT{
-			id: fmt.Sprintf("subnet-%v", i),
-			custom: map[string]interface{}{
-				"vpc": VPC,
-				"az":  az[i%len(az)],
+		subnet := &subnet_t{
+			&nodeT{
+				id: fmt.Sprintf("subnet-%v", i),
+				custom: map[string]interface{}{
+					"vpc": VPC,
+					"az":  az[i%len(az)],
+				},
 			},
 		}
 
@@ -39,20 +57,20 @@ func testDataVpc(t *testing.T) Graph {
 		g.Associate(subnet, depends, VPC)
 	}
 
-	hosts := []*nodeT{}
+	hosts := []*host_t{}
 	for i := range subnets {
 
 		ipMask := fmt.Sprintf("10.0.%d.%s", i, "%d")
 
 		for j := 0; j < 4; j++ {
 
-			host := &nodeT{
+			host := &host_t{&nodeT{
 				id: fmt.Sprintf("host-%v-%v", i, j),
 				custom: map[string]interface{}{
 					"subnet": subnets[i],
 					"ip":     fmt.Sprintf(ipMask, j),
 				},
-			}
+			}}
 
 			g.Add(host)
 			g.Associate(host, depends, subnets[i])
@@ -62,29 +80,46 @@ func testDataVpc(t *testing.T) Graph {
 		}
 	}
 
+	disks := []*device_t{}
 	for i := range hosts {
 
-		gpu := &nodeT{
-			id: fmt.Sprintf("gpu-%d", i),
-			custom: map[string]interface{}{
-				"host": hosts[i],
-				"path": "/dev/gpu",
-			},
-		}
-
-		g.Add(gpu)
-		g.Associate(hosts[i], contains, gpu)
-
-		disk := &nodeT{
+		disk := &device_t{&nodeT{
 			id: fmt.Sprintf("disk-%d", i),
 			custom: map[string]interface{}{
 				"host":  hosts[i],
 				"mount": "/dev/sd1",
 			},
-		}
+		}}
+
+		disks = append(disks, disk)
 
 		g.Add(disk)
 		g.Associate(hosts[i], contains, disk)
+
+		// find the subnet of the host
+		onlySubnet := func(n Node) bool {
+			_, is := n.(*subnet_t)
+
+			if is {
+				g.Associate(disk, depends, n)
+			}
+			return is
+		}
+
+		g.To(contains, hosts[i]).Nodes(onlySubnet)
+	}
+
+	// verify all disks have a dependency on the subnet
+	for _, d := range disks {
+
+		subnet, is := NodeSlice(g.From(d, depends).Nodes())[0].(*subnet_t)
+		require.True(t, is)
+
+		onlyDisks := func(n Node) bool {
+			_, is := n.(*device_t)
+			return is
+		}
+		require.Equal(t, 4, len(NodeSlice(g.To(depends, subnet).Nodes(onlyDisks))))
 	}
 
 	return g
