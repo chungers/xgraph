@@ -1,8 +1,11 @@
 package xgraph // import "github.com/orkestr8/xgraph"
 
 type NodeKey interface{}
-type Node interface {
+type NodeKeyer interface {
 	NodeKey() NodeKey
+}
+type Node interface {
+	NodeKeyer
 }
 
 type Contexter interface {
@@ -21,6 +24,9 @@ type Edge interface {
 }
 
 type Options struct {
+
+	// NodeIDOffset is the base to increment node id from.
+	NodeIDOffset int64
 }
 
 type GraphBuilder interface {
@@ -34,14 +40,14 @@ type Nodes <-chan Node
 type Edges <-chan Edge
 
 type NodesOrEdges interface {
-	Nodes() Nodes
-	Edges() Edges
+	Nodes(...func(Node) bool) Nodes
+	Edges(...func(Edge) bool) Edges
 }
 
 type Graph interface {
 	Node(NodeKey) Node
 	Edge(from Node, kind EdgeKind, to Node) Edge
-	To(Node, EdgeKind) NodesOrEdges
+	To(EdgeKind, Node) NodesOrEdges
 	From(Node, EdgeKind) NodesOrEdges
 }
 

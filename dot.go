@@ -6,6 +6,7 @@ import (
 	gonum "gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/encoding"
 	"gonum.org/v1/gonum/graph/encoding/dot"
+	"gonum.org/v1/gonum/graph/simple"
 )
 
 type dotSubgraph struct {
@@ -146,7 +147,7 @@ func RenderDot(g Graph, options DotOptions) ([]byte, error) {
 
 	dg := &dotGraph{
 		DotOptions: options,
-		Directed:   xg.DirectedBuilder,
+		Directed:   simple.NewDirectedGraph(), //xg.DirectedBuilder,
 		xg:         xg,
 	}
 

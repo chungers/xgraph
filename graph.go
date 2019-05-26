@@ -4,25 +4,37 @@ import (
 	"sync"
 
 	gonum "gonum.org/v1/gonum/graph"
-	"gonum.org/v1/gonum/graph/simple"
 )
 
 type graph struct {
-	gonum.DirectedBuilder // tracks nodes used for all directed graphs
 	Options
 
+	nextID   *nodeID
 	directed map[EdgeKind]*directed
 	nodeKeys map[interface{}]*node
 
 	lock sync.RWMutex
 }
 
+type nodeID struct {
+	value int64
+	lock  sync.Mutex
+}
+
+func (n *nodeID) get() (v int64) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	v = n.value
+	n.value++
+	return
+}
+
 func newGraph(options Options) *graph {
 	return &graph{
-		DirectedBuilder: simple.NewDirectedGraph(),
-		Options:         options,
-		nodeKeys:        map[interface{}]*node{},
-		directed:        map[EdgeKind]*directed{},
+		nextID:   &nodeID{value: options.NodeIDOffset},
+		Options:  options,
+		nodeKeys: map[interface{}]*node{},
+		directed: map[EdgeKind]*directed{},
 	}
 }
 
@@ -76,9 +88,8 @@ func (g *graph) Add(n Node, other ...Node) error {
 		if !has {
 			newNode := &node{
 				Node: all[i],
-				id:   g.NewNode().ID(),
+				id:   g.nextID.get(),
 			}
-			g.AddNode(newNode)
 			g.nodeKeys[all[i].NodeKey()] = newNode
 		} else if found.Node != all[i] {
 			return ErrDuplicateKey{all[i]}
@@ -135,19 +146,19 @@ func (g *graph) Edge(from Node, kind EdgeKind, to Node) Edge {
 
 func (g *graph) From(from Node, kind EdgeKind) NodesOrEdges {
 	return &nodesOrEdges{
-		nodes: func() Nodes { return g.find(kind, from, false) },
-		edges: func() Edges { return g.findEdges(kind, from, false) },
+		nodes: func(s []func(Node) bool) Nodes { return g.find(kind, from, false, s) },
+		edges: func(s []func(Edge) bool) Edges { return g.findEdges(kind, from, false, s) },
 	}
 }
 
-func (g *graph) To(to Node, kind EdgeKind) NodesOrEdges {
+func (g *graph) To(kind EdgeKind, to Node) NodesOrEdges {
 	return &nodesOrEdges{
-		nodes: func() Nodes { return g.find(kind, to, true) },
-		edges: func() Edges { return g.findEdges(kind, to, true) },
+		nodes: func(s []func(Node) bool) Nodes { return g.find(kind, to, true, s) },
+		edges: func(s []func(Edge) bool) Edges { return g.findEdges(kind, to, true, s) },
 	}
 }
 
-func (g *graph) find(kind EdgeKind, x Node, to bool) (nodes Nodes) {
+func (g *graph) find(kind EdgeKind, x Node, to bool, checks []func(Node) bool) (nodes Nodes) {
 	g.lock.RLock()
 	defer g.lock.RUnlock()
 
@@ -176,18 +187,32 @@ func (g *graph) find(kind EdgeKind, x Node, to bool) (nodes Nodes) {
 			result = directed.From(arg.ID())
 		}
 
+	loop:
 		for {
 			if next := result.Next(); !next {
 				break
 			}
-			ch <- result.Node().(*node).Node
+
+			eval := result.Node().(*node).Node
+
+			if len(checks) == 0 {
+				ch <- eval
+				continue loop
+			}
+
+			for i := range checks {
+				if checks[i](eval) {
+					ch <- eval
+					break
+				}
+			}
 		}
 	}()
 
 	return
 }
 
-func (g *graph) findEdges(kind EdgeKind, x Node, to bool) (edges Edges) {
+func (g *graph) findEdges(kind EdgeKind, x Node, to bool, checks []func(Edge) bool) (edges Edges) {
 	g.lock.RLock()
 	defer g.lock.RUnlock()
 
@@ -216,15 +241,30 @@ func (g *graph) findEdges(kind EdgeKind, x Node, to bool) (edges Edges) {
 			result = directed.From(arg.ID())
 		}
 
+	loop:
 		for {
 			if next := result.Next(); !next {
 				break
 			}
 
+			var eval *edgeView
+
 			if to {
-				ch <- &edgeView{directed.edges[directed.Edge(result.Node().ID(), arg.ID())]}
+				eval = &edgeView{directed.edges[directed.Edge(result.Node().ID(), arg.ID())]}
 			} else {
-				ch <- &edgeView{directed.edges[directed.Edge(arg.ID(), result.Node().ID())]}
+				eval = &edgeView{directed.edges[directed.Edge(arg.ID(), result.Node().ID())]}
+			}
+
+			if len(checks) == 0 {
+				ch <- eval
+				continue loop
+			}
+
+			for i := range checks {
+				if checks[i](eval) {
+					ch <- eval
+					break
+				}
 			}
 		}
 	}()
