@@ -106,6 +106,16 @@ func (g *graph) Node(k NodeKey) Node {
 	return g.nodeKeys[k]
 }
 
+func (g *graph) directedGraph(kind EdgeKind) *directed {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+	// add a new graph builder if this is a new kind
+	if _, has := g.directed[kind]; !has {
+		g.directed[kind] = newDirected(g, kind)
+	}
+	return g.directed[kind]
+}
+
 func (g *graph) Associate(from Node, kind EdgeKind, to Node, optionalContext ...interface{}) (Edge, error) {
 	fromNode := g.nodeKeys[from.NodeKey()]
 	if fromNode == nil {
@@ -116,15 +126,7 @@ func (g *graph) Associate(from Node, kind EdgeKind, to Node, optionalContext ...
 		return nil, ErrNoSuchNode{Node: to, context: "To"}
 	}
 
-	g.lock.Lock()
-	defer g.lock.Unlock()
-
-	// add a new graph builder if this is a new kind
-	if _, has := g.directed[kind]; !has {
-		g.directed[kind] = newDirected(g, kind)
-	}
-
-	return g.directed[kind].associate(fromNode, toNode, optionalContext...), nil
+	return g.directedGraph(kind).associate(fromNode, toNode, optionalContext...), nil
 }
 
 func (g *graph) Edge(from Node, kind EdgeKind, to Node) Edge {
