@@ -40,7 +40,13 @@ type Nodes <-chan Node
 type Edges <-chan Edge
 
 type NodesOrEdges interface {
+
+	// Nodes returns the nodes matching the selector. The selector is read-only and should not
+	// mutate the state of the graph via associate or adding new nodes
 	Nodes(...func(Node) bool) Nodes
+
+	// Edges returns the edges matching the selector. The selector is read-only and should not
+	// mutate the state of the graph via associate or adding new nodes
 	Edges(...func(Edge) bool) Edges
 }
 

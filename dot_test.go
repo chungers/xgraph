@@ -99,14 +99,12 @@ func testDataVpc(t *testing.T) Graph {
 		// find the subnet of the host
 		onlySubnet := func(n Node) bool {
 			_, is := n.(*subnet_t)
-
-			if is {
-				g.Associate(disk, depends, n)
-			}
 			return is
 		}
 
-		g.To(contains, hosts[i]).Nodes(onlySubnet)
+		sn := NodeSlice(g.To(contains, hosts[i]).Nodes(onlySubnet))[0]
+		g.Associate(disk, depends, sn)
+
 	}
 
 	// verify all disks have a dependency on the subnet
