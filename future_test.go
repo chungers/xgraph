@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -180,4 +181,68 @@ func TestFutureUsageMultipleWaitersInjectValues(t *testing.T) {
 	close(start)
 	require.True(t, f.(*future).complete)
 
+}
+
+func testFib(i int) int {
+	if i <= 1 {
+		return i
+	}
+	return testFib(i-1) + testFib(i-2)
+}
+
+func testFibLoop(i int) int {
+	f1, f2, f3 := 0, 1, 1
+	for j := 2; j <= i; j++ {
+		f3 = f1 + f2
+		f1 = f2
+		f2 = f3
+	}
+	return f3
+}
+
+func TestFutureUsageLongChain(t *testing.T) {
+
+	N := 50000
+
+	start := make(chan interface{})
+
+	ctx := context.Background()
+
+	f0 := Async(ctx,
+		func() (interface{}, error) {
+			<-start
+			return int(0), nil
+		})
+
+	f1 := Async(ctx,
+		func() (interface{}, error) {
+			return f0.Value().(int) + 1, nil
+		})
+
+	fn_1 := f1
+	fn_2 := f0
+	fn := fn_1
+
+	for i := 1; i < N; i++ {
+		a, b := fn_1, fn_2 // need to copy the pointer values otherwise they will change as loop variables
+		fn = Async(ctx,
+			func() (interface{}, error) {
+				return a.Value().(int) + b.Value().(int), nil
+			})
+
+		fn_2 = fn_1
+		fn_1 = fn
+	}
+
+	t0 := time.Now()
+	expect := testFibLoop(N)
+	dt := time.Now().Sub(t0)
+
+	t0 = time.Now()
+	close(start) // start
+	actual := fn.Value()
+	dt2 := time.Now().Sub(t0)
+
+	require.Equal(t, expect, actual)
+	t.Log("N=", N, "dt(fib())=", dt, "vs", "dt(chain)=", dt2, "chain is", int64(dt2)/int64(dt), "x slower")
 }
