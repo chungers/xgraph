@@ -8,8 +8,6 @@ import (
 	"gonum.org/v1/gonum/graph/topo"
 )
 
-type intNode int64
-
 func TestGonumGraph(t *testing.T) {
 
 	g := simple.NewDirectedGraph()
@@ -55,19 +53,6 @@ func TestGonumGraph(t *testing.T) {
 	cycle = topo.DirectedCyclesIn(g)
 	require.Equal(t, 2, len(cycle))
 	t.Log(cycle)
-}
-
-type nodeT struct {
-	id     string
-	custom interface{}
-}
-
-func (n *nodeT) NodeKey() NodeKey {
-	return NodeKey(n.id)
-}
-
-func (n *nodeT) String() string {
-	return n.id
 }
 
 func TestAdd(t *testing.T) {

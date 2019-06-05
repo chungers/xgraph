@@ -170,6 +170,68 @@ func TestDirectedSort(t *testing.T) {
 
 }
 
+func TestDirectedSortVisit(t *testing.T) {
+
+	g := Builder(Options{})
+	next := EdgeKind(1)
+	prev := EdgeKind(2)
+
+	m := 10001
+	sum := 0
+	var last, first Node
+	for i := 0; i < m; i++ {
+
+		sum += i
+		this := &nodeT{id: fmt.Sprintf("N%v", i), custom: i}
+		g.Add(this)
+
+		if i == 0 {
+			first = this
+		}
+
+		if last != nil {
+			g.Associate(first, next, this) // first node is connected to every other node (m-1 edges)
+			g.Associate(last, next, this)
+			g.Associate(this, prev, last)
+		}
+		last = this
+
+	}
+
+	forward, err := DirectedSort(g, next)
+	require.NoError(t, err)
+
+	for i := range forward {
+
+		n := forward[i]
+
+		upstream := EdgeSlice(g.To(next, n).Edges())
+		downstream := EdgeSlice(g.From(n, next).Edges())
+
+		switch {
+		case i == 0:
+			require.Equal(t, m-1, len(downstream), fmt.Sprintf("n=%v, i=%d", n, i))
+			require.Equal(t, 0, len(upstream), fmt.Sprintf("n=%v, i=%d", n, i))
+		case i == 1:
+			require.Equal(t, 1, len(downstream), fmt.Sprintf("n=%v, i=%d", n, i))
+			require.Equal(t, 1, len(upstream), fmt.Sprintf("n=%v, i=%d", n, i))
+		case i == m-1:
+			require.Equal(t, 0, len(downstream), fmt.Sprintf("n=%v, i=%d", n, i))
+			require.Equal(t, 2, len(upstream), fmt.Sprintf("n=%v, i=%d", n, i))
+		case i > 0:
+			require.Equal(t, 1, len(downstream), fmt.Sprintf("n=%v, i=%d", n, i))
+			require.Equal(t, 2, len(upstream), fmt.Sprintf("n=%v, i=%d", n, i))
+		}
+
+		if len(upstream) > 0 {
+			require.Equal(t, n, upstream[0].To())
+		}
+		if len(downstream) > 0 {
+			require.Equal(t, n, downstream[0].From())
+		}
+	}
+}
+
 func TestGraphQueries(t *testing.T) {
 
 	g := Builder(Options{})
