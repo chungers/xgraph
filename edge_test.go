@@ -20,7 +20,7 @@ func TestEdgeLabel(t *testing.T) {
 			"foo", "bar",
 		},
 	}
-	require.Equal(t, "", ed.label())
+	require.Equal(t, "foo,bar", ed.label())
 
 	label := "my label"
 	ed = &edge{
