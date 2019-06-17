@@ -1,7 +1,7 @@
 package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
-	"fmt"
+	"sort"
 	"strings"
 
 	gonum "gonum.org/v1/gonum/graph"
@@ -18,10 +18,6 @@ type edge struct {
 	labeler EdgeLabeler
 }
 
-func (e *edge) String() string {
-	return fmt.Sprintf("%v(%v,%v)[%v]", e.kind, e.from, e.to, e.label())
-}
-
 func (e *edge) label() string {
 	if e.labeler != nil {
 		return e.labeler(&edgeView{e})
@@ -35,8 +31,6 @@ func (e *edge) label() string {
 			labels = append(labels, v(&edgeView{e}))
 		case EdgeLabeler:
 			labels = append(labels, v(&edgeView{e}))
-		default:
-			labels = append(labels, fmt.Sprintf("%v", v))
 		}
 
 	}
@@ -72,4 +66,28 @@ func (e *edgeView) Context() []interface{} {
 
 func (e *edgeView) Kind() EdgeKind {
 	return e.kind
+}
+
+func SortEdges(edges []Edge, less func(Edge, Edge) bool) {
+	sort.Sort(&edgeSorter{slice: edges, less: less})
+}
+
+type edgeSorter struct {
+	slice []Edge
+	less  func(a, b Edge) bool
+}
+
+// Len is part of sort.Interface.
+func (es *edgeSorter) Len() int {
+	return len(es.slice)
+}
+
+// Swap is part of sort.Interface.
+func (es *edgeSorter) Swap(i, j int) {
+	es.slice[i], es.slice[j] = es.slice[j], es.slice[i]
+}
+
+// Less is part of sort.Interface. It is implemented by calling the "by" closure in the sorter.
+func (es *edgeSorter) Less(i, j int) bool {
+	return es.less(es.slice[i], es.slice[j])
 }

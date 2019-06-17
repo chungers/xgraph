@@ -20,7 +20,7 @@ func TestEdgeLabel(t *testing.T) {
 			"foo", "bar",
 		},
 	}
-	require.Equal(t, "foo,bar", ed.label())
+	require.Equal(t, "", ed.label())
 
 	label := "my label"
 	ed = &edge{
@@ -44,4 +44,72 @@ func TestEdgeLabel(t *testing.T) {
 		},
 	}
 	require.Equal(t, strings.Join([]string{label, label2}, ","), ed.label())
+}
+
+func TestSortEdges(t *testing.T) {
+
+	x1 := &nodeT{id: "x1"}
+	x2 := &nodeT{id: "x2"}
+	x3 := &nodeT{id: "x3"}
+	x4 := &nodeT{id: "x4"}
+	sum := &nodeT{id: "sum"}
+
+	input1 := EdgeKind(1)
+
+	g := Builder(Options{})
+	g.Add(x1, x2, x3, x4, sum)
+
+	g.Associate(x1, input1, sum, 3)
+	g.Associate(x2, input1, sum, 2)
+	g.Associate(x3, input1, sum, 1)
+	g.Associate(x4, input1, sum, 0)
+
+	orderByContext := func(a, b Edge) bool {
+		if a.To().NodeKey() != b.To().NodeKey() {
+			return false
+		}
+		ca := a.Context()
+		cb := b.Context()
+		if len(ca) == 0 && len(cb) == 0 {
+			return false
+		}
+		idx, ok := ca[0].(int)
+		if ok {
+			idx2, ok2 := cb[0].(int)
+			if ok2 {
+				return idx < idx2
+			}
+		}
+		return false
+	}
+
+	input1s := EdgeSlice(g.To(input1, sum).Edges())
+
+	t.Log(input1s)
+
+	SortEdges(input1s, orderByContext)
+
+	t.Log("sorted=", input1s)
+
+	keys := []string{}
+	for i := range input1s {
+		keys = append(keys, input1s[i].To().NodeKey().(string))
+	}
+	require.Equal(t, []string{"x4", "x3", "x2", "x1"}, keys)
+
+	input2 := EdgeKind(2)
+	g.Associate(x1, input2, sum)
+	g.Associate(x2, input2, sum)
+	g.Associate(x3, input2, sum)
+	g.Associate(x4, input2, sum)
+
+	input2s := EdgeSlice(g.To(input2, sum).Edges())
+	SortEdges(input2s, orderByContext)
+
+	keys = []string{}
+	for i := range input1s {
+		keys = append(keys, input2s[i].To().NodeKey().(string))
+	}
+	require.Equal(t, []string{"x1", "x2", "x3", "x4"}, keys)
+
 }
