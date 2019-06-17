@@ -83,4 +83,6 @@ func TestCompileExec(t *testing.T) {
 
 		dag = f
 	}
+
+	t.Log("awaitable=", dag)
 }
