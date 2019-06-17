@@ -18,6 +18,7 @@ type edge struct {
 	labeler EdgeLabeler
 }
 
+// String is for printing
 func (e *edge) String() string {
 	return fmt.Sprintf("%v(%v,%v)[%v]", e.kind, e.from, e.to, e.label())
 }
