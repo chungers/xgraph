@@ -51,6 +51,24 @@ func TestCompileExec(t *testing.T) {
 		t.Log("CUR", flow[i], "IN=", to, "OUT=", from)
 
 		// Sort the edges by context[0]
+		SortEdges(to, func(a, b Edge) bool {
+			if a.To().NodeKey() != b.To().NodeKey() {
+				return false
+			}
+			ca := a.Context()
+			cb := b.Context()
+			if len(ca) == 0 && len(cb) == 0 {
+				return false
+			}
+			idx, ok := ca[0].(int)
+			if ok {
+				idx2, ok2 := cb[0].(int)
+				if ok2 {
+					return idx < idx2
+				}
+			}
+			return false
+		})
 
 		input := []Awaitable{}
 		for _, in := range to {

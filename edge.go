@@ -1,6 +1,7 @@
 package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -18,6 +19,11 @@ type edge struct {
 	labeler EdgeLabeler
 }
 
+// String is for printing
+func (e *edge) String() string {
+	return fmt.Sprintf("%v(%v,%v)[%v]", e.kind, e.from, e.to, e.label())
+}
+
 func (e *edge) label() string {
 	if e.labeler != nil {
 		return e.labeler(&edgeView{e})
@@ -31,6 +37,8 @@ func (e *edge) label() string {
 			labels = append(labels, v(&edgeView{e}))
 		case EdgeLabeler:
 			labels = append(labels, v(&edgeView{e}))
+		default:
+			labels = append(labels, fmt.Sprintf("%v", v))
 		}
 
 	}

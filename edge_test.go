@@ -1,6 +1,7 @@
 package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
+	"sort"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestEdgeLabel(t *testing.T) {
 			"foo", "bar",
 		},
 	}
-	require.Equal(t, "", ed.label())
+	require.Equal(t, "foo,bar", ed.label())
 
 	label := "my label"
 	ed = &edge{
@@ -93,7 +94,7 @@ func TestSortEdges(t *testing.T) {
 
 	keys := []string{}
 	for i := range input1s {
-		keys = append(keys, input1s[i].To().NodeKey().(string))
+		keys = append(keys, input1s[i].From().NodeKey().(string))
 	}
 	require.Equal(t, []string{"x4", "x3", "x2", "x1"}, keys)
 
@@ -108,8 +109,9 @@ func TestSortEdges(t *testing.T) {
 
 	keys = []string{}
 	for i := range input1s {
-		keys = append(keys, input2s[i].To().NodeKey().(string))
+		keys = append(keys, input2s[i].From().NodeKey().(string))
 	}
+	sort.Strings(keys) // The ordering doesn't matter in this case.
 	require.Equal(t, []string{"x1", "x2", "x3", "x4"}, keys)
 
 }
