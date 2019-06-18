@@ -59,7 +59,7 @@ func TestCompileExec(t *testing.T) {
 
 	ctx := context.Background()
 
-	futures := map[string]Awaitable{}
+	futures := map[Edge]Awaitable{}
 
 	var dag Awaitable
 
@@ -73,7 +73,7 @@ func TestCompileExec(t *testing.T) {
 
 		input := []Awaitable{}
 		for _, in := range to {
-			if f, has := futures[fmt.Sprintf("%v", in)]; has {
+			if f, has := futures[in]; has {
 				input = append(input, f)
 			}
 		}
@@ -108,7 +108,7 @@ func TestCompileExec(t *testing.T) {
 			})
 
 		for _, out := range from {
-			futures[fmt.Sprintf("%v", out)] = f
+			futures[out] = f
 		}
 
 		dag = f
