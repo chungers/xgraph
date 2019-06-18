@@ -44,9 +44,10 @@ func (e *edge) Attributes() []encoding.Attribute {
 	return attr.Attributes()
 }
 
-// edgeView is used to work around the problem that gonum.Edge.From() and xgraph.Edge.From()
-// cant be disambiguated by the compiler (different return types).  We want to separate the
-// api implementation from the low-level implementations like dot.Attributer as well.
+// edgeView is used to work around the problem that gonum.Edge.From() and xgraph.Edge.From() can't
+// be disambiguated by the compiler (different return types).  Also, we want to restrict the
+// properties exposed by separating the api implementation from the low-level implementations
+// like dot.Attributer.
 type edgeView struct {
 	*edge
 }

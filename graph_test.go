@@ -114,6 +114,16 @@ func TestAssociate(t *testing.T) {
 	require.Equal(t, 0, len(g.Edge(A, likes, C).Context()))
 	require.Nil(t, g.Edge(C, shares, A), "Shares is not an association kind between A and B.")
 
+	// Repeated calls to get the edge always result in the same reference:
+	edge1 := g.Edge(A, likes, C)
+	edge2 := g.Edge(A, likes, C)
+	require.True(t, edge1 == edge2)
+	lookup := map[Edge]interface{}{
+		edge1: 1,
+	}
+	require.Equal(t, 1, lookup[edge1])
+	require.Equal(t, 1, lookup[edge2])
+
 	require.Equal(t, 2, len(EdgeSlice(g.From(A, likes).Edges())))
 	require.Equal(t, 1, len(EdgeSlice(g.To(likes, B).Edges())))
 	require.Equal(t, "A", EdgeSlice(g.To(likes, B).Edges())[0].From().NodeKey())
