@@ -3,28 +3,25 @@ package xgraph // import "github.com/orkestr8/xgraph"
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func testOrderByContextIndex(a, b Edge) bool {
-	if a.To().NodeKey() != b.To().NodeKey() {
-		return false
-	}
 	ca := a.Context()
 	cb := b.Context()
-	if len(ca) == 0 && len(cb) == 0 {
-		return false
-	}
-	idx, ok := ca[0].(int)
-	if ok {
-		idx2, ok2 := cb[0].(int)
-		if ok2 {
-			return idx < idx2
+	if len(ca) > 0 && len(cb) > 0 {
+		idx, ok := ca[0].(int)
+		if ok {
+			idx2, ok2 := cb[0].(int)
+			if ok2 {
+				return idx < idx2
+			}
 		}
 	}
-	return false
+	return strings.Compare(fmt.Sprintf("%v", a.From().NodeKey()), fmt.Sprintf("%v", b.From().NodeKey())) < 0
 }
 
 func TestCompileExec(t *testing.T) {
@@ -44,9 +41,9 @@ func TestCompileExec(t *testing.T) {
 	g := Builder(Options{})
 	g.Add(x1, x2, x3, y1, y2, sumX, sumY, ratio)
 
-	g.Associate(x1, input, sumX, 0)
-	g.Associate(x2, input, sumX, 1)
-	g.Associate(x3, input, sumX, 2)
+	g.Associate(x1, input, sumX) // ordering comes from the nodeKey, lexicographically
+	g.Associate(x2, input, sumX)
+	g.Associate(x3, input, sumX)
 	g.Associate(y1, input, sumY, 2)
 	g.Associate(y2, input, sumY, 1)
 	g.Associate(x3, input, sumY, 0)
@@ -60,13 +57,16 @@ func TestCompileExec(t *testing.T) {
 	ctx := context.Background()
 
 	futures := map[Edge]Awaitable{}
+	flowInput := map[Node]chan interface{}{}
 
 	var dag Awaitable
 
 	for i := range flow {
 
-		to := EdgeSlice(g.To(input, flow[i]).Edges())
-		from := EdgeSlice(g.From(flow[i], input).Edges())
+		this := flow[i]
+
+		to := EdgeSlice(g.To(input, this).Edges())
+		from := EdgeSlice(g.From(this, input).Edges())
 
 		// Sort the edges by context[0]
 		SortEdges(to, testOrderByContextIndex)
@@ -78,9 +78,13 @@ func TestCompileExec(t *testing.T) {
 			}
 		}
 
-		t.Log("COMPILE STEP", flow[i], "IN=", to, "OUT=", from, "INPUT=", input)
-
-		this := flow[i]
+		// No input means this is a Source node whose computation will be input to others
+		var inputChan <-chan interface{}
+		if len(input) == 0 {
+			flowInput[this] = make(chan interface{}, 1)
+			inputChan = flowInput[this]
+		}
+		fmt.Println("COMPILE STEP", this, "IN=", to, "OUT=", from, "INPUT=", input)
 
 		f := Async(ctx,
 			func() (interface{}, error) {
@@ -95,13 +99,16 @@ func TestCompileExec(t *testing.T) {
 					}
 				}
 
-				// t.Log("RUNNING - CUR", flow[i], "IN=", to, "OUT=", from, "ARGS=", args)
+				// t.Log("RUNNING - CUR", this, "IN=", to, "OUT=", from, "ARGS=", args)
 
 				// Call the actual function
 				// Just print the operator
 				out := fmt.Sprintf("%v", this.NodeKey())
 				if len(args) > 0 {
 					out = fmt.Sprintf("%v( %v )", this.NodeKey(), args)
+				} else if inputChan != nil {
+					v := <-inputChan
+					out = fmt.Sprintf("%v", v)
 				}
 
 				return out, nil
@@ -114,6 +121,28 @@ func TestCompileExec(t *testing.T) {
 		dag = f
 	}
 
-	t.Log("result=", dag.Value())
-	require.Equal(t, "ratio( [sumX( [x1 x2 x3] ) sumY( [x3 y2 y1] )] )", dag.Value())
+	// Now we've built the graph.  Execute it.
+	done := make(chan interface{})
+	go func() {
+		t.Log("result=", dag.Value())
+		close(done)
+	}()
+
+	// Set the input
+	require.Equal(t, 5, len(flowInput))
+	require.NotNil(t, flowInput[x1])
+	require.NotNil(t, flowInput[x2])
+	require.NotNil(t, flowInput[x3])
+	require.NotNil(t, flowInput[y1])
+	require.NotNil(t, flowInput[y2])
+
+	// Idea: take a map and set the values accordingly
+	flowInput[x1] <- "x1v"
+	flowInput[x2] <- "x2v"
+	flowInput[x3] <- "x3v"
+	flowInput[y1] <- "y1v"
+	flowInput[y2] <- "y2v"
+
+	<-done
+	require.Equal(t, "ratio( [sumX( [x1v x2v x3v] ) sumY( [x3v y2v y1v] )] )", dag.Value())
 }
