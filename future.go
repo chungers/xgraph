@@ -21,6 +21,7 @@ type Do func() (interface{}, error)
 
 type future struct {
 	ctx      context.Context
+	do       Do
 	value    interface{}
 	err      error
 	done     chan interface{}
@@ -81,16 +82,20 @@ func (f *future) Error() error {
 	return f.err
 }
 
-func Async(ctx context.Context, do Do) Awaitable {
-
-	f := &future{
-		ctx:  ctx,
-		done: make(chan interface{}),
-	}
-
+func (f *future) doAsync(ctx context.Context) {
+	f.ctx = ctx
 	go func() {
-		f.results(do())
+		f.results(f.do())
 		return
 	}()
+}
+
+func newFuture(do Do) *future {
+	return &future{do: do, done: make(chan interface{})}
+}
+
+func Async(ctx context.Context, do Do) Awaitable {
+	f := newFuture(do)
+	f.doAsync(ctx)
 	return f
 }
