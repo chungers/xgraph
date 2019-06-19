@@ -54,13 +54,10 @@ func TestCompileExec(t *testing.T) {
 	require.NoError(t, err)
 	t.Log(flow)
 
-	ctx := context.Background()
-
 	futures := map[Edge]Awaitable{}
 	flowStart := []chan<- interface{}{}
 	flowInput := map[Node]chan<- interface{}{}
-
-	var dag Awaitable
+	flowOperators := []*future{}
 
 	for i := range flow {
 
@@ -91,58 +88,65 @@ func TestCompileExec(t *testing.T) {
 
 		t.Log("COMPILE STEP", this, "IN=", to, "OUT=", from, "INPUT=", input)
 
-		f := Async(ctx,
-			func() (interface{}, error) {
+		f := newFuture(func() (interface{}, error) {
 
-				if startChan != nil {
-					<-startChan
+			if startChan != nil {
+				<-startChan
+			}
+
+			// Given input in array of awaitable...
+			args := []interface{}{}
+
+			for i := range input {
+				if err := input[i].Error(); err != nil {
+					return nil, err
+				} else {
+					args = append(args, input[i].Value())
 				}
+			}
 
-				// Given input in array of awaitable...
-				args := []interface{}{}
+			// t.Log("RUNNING - CUR", this, "IN=", to, "OUT=", from, "ARGS=", args)
 
-				for i := range input {
-					if err := input[i].Error(); err != nil {
-						return nil, err
-					} else {
-						args = append(args, input[i].Value())
-					}
-				}
+			// Call the actual function
+			// Just print the operator
+			out := fmt.Sprintf("%v", this.NodeKey())
+			if len(input) > 0 {
+				out = fmt.Sprintf("%v( %v )", this.NodeKey(), args)
+			} else if inputChan != nil {
 
-				// t.Log("RUNNING - CUR", this, "IN=", to, "OUT=", from, "ARGS=", args)
+				defer close(inputChan)
 
-				// Call the actual function
-				// Just print the operator
-				out := fmt.Sprintf("%v", this.NodeKey())
-				if len(input) > 0 {
-					out = fmt.Sprintf("%v( %v )", this.NodeKey(), args)
-				} else if inputChan != nil {
+				v := <-inputChan
+				out = fmt.Sprintf("%v", v)
+			}
 
-					defer close(inputChan)
-
-					v := <-inputChan
-					out = fmt.Sprintf("%v", v)
-				}
-
-				return out, nil
-			})
+			return out, nil
+		})
 
 		for _, out := range from {
 			futures[out] = f
 		}
 
-		dag = f
+		flowOperators = append(flowOperators, f)
 	}
 
 	// Now we've built the graph.  Execute it.
 	done := make(chan interface{})
 	go func() {
-		t.Log("result=", dag.Value())
+		t.Log("result=", flowOperators[len(flowOperators)-1].Value())
 		close(done)
 	}()
 
 	require.Equal(t, 5, len(flowStart))
+
+	ctx := context.Background()
+
 	// Start processing
+	for i := range flowOperators {
+		flowOperators[i].doAsync(ctx)
+	}
+
+	// Give signal to start
 	for i := range flowStart {
 		close(flowStart[i])
 	}
@@ -163,5 +167,8 @@ func TestCompileExec(t *testing.T) {
 	flowInput[y2] <- "y2v"
 
 	<-done
+
+	var dag Awaitable = flowOperators[len(flowOperators)-1]
+
 	require.Equal(t, "ratio( [sumX( [x1v x2v x3v] ) sumY( [x3v y2v y1v] )] )", dag.Value())
 }
