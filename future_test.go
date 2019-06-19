@@ -68,16 +68,16 @@ func TestFutureUsageMultipleWaiters2(t *testing.T) {
 
 	start := make(chan interface{})
 
-	ctx := context.Background()
-	f := Async(ctx,
-		func() (interface{}, error) {
+	f := newFuture(func() (interface{}, error) {
 
-			<-start
+		<-start
 
-			return seed, nil
-		})
+		return seed, nil
+	})
 
 	require.NotNil(t, f)
+
+	f.doAsync(context.Background())
 
 	c := 10000
 	results := make(chan interface{}, c)
@@ -112,7 +112,7 @@ func TestFutureUsageMultipleWaiters2(t *testing.T) {
 	}
 
 	require.Equal(t, sum, actual)
-	require.True(t, f.(*future).complete)
+	require.True(t, f.complete)
 }
 
 func TestFutureUsageMultipleWaitersCancellation(t *testing.T) {
