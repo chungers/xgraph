@@ -57,7 +57,8 @@ func TestCompileExec(t *testing.T) {
 	ctx := context.Background()
 
 	futures := map[Edge]Awaitable{}
-	flowInput := map[Node]chan interface{}{}
+	flowStart := []chan<- interface{}{}
+	flowInput := map[Node]chan<- interface{}{}
 
 	var dag Awaitable
 
@@ -79,15 +80,24 @@ func TestCompileExec(t *testing.T) {
 		}
 
 		// No input means this is a Source node whose computation will be input to others
-		var inputChan <-chan interface{}
+		var startChan, inputChan chan interface{}
 		if len(input) == 0 {
-			flowInput[this] = make(chan interface{}, 1)
-			inputChan = flowInput[this]
+			inputChan = make(chan interface{}, 1)
+			flowInput[this] = inputChan
+
+			startChan = make(chan interface{})
+			flowStart = append(flowStart, startChan)
 		}
+
 		fmt.Println("COMPILE STEP", this, "IN=", to, "OUT=", from, "INPUT=", input)
 
 		f := Async(ctx,
 			func() (interface{}, error) {
+
+				if startChan != nil {
+					<-startChan
+				}
+
 				// Given input in array of awaitable...
 				args := []interface{}{}
 
@@ -104,9 +114,12 @@ func TestCompileExec(t *testing.T) {
 				// Call the actual function
 				// Just print the operator
 				out := fmt.Sprintf("%v", this.NodeKey())
-				if len(args) > 0 {
+				if len(input) > 0 {
 					out = fmt.Sprintf("%v( %v )", this.NodeKey(), args)
 				} else if inputChan != nil {
+
+					defer close(inputChan)
+
 					v := <-inputChan
 					out = fmt.Sprintf("%v", v)
 				}
@@ -127,6 +140,12 @@ func TestCompileExec(t *testing.T) {
 		t.Log("result=", dag.Value())
 		close(done)
 	}()
+
+	require.Equal(t, 5, len(flowStart))
+	// Start processing
+	for i := range flowStart {
+		close(flowStart[i])
+	}
 
 	// Set the input
 	require.Equal(t, 5, len(flowInput))
