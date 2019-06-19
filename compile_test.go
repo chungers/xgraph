@@ -89,7 +89,7 @@ func TestCompileExec(t *testing.T) {
 			flowStart = append(flowStart, startChan)
 		}
 
-		fmt.Println("COMPILE STEP", this, "IN=", to, "OUT=", from, "INPUT=", input)
+		t.Log("COMPILE STEP", this, "IN=", to, "OUT=", from, "INPUT=", input)
 
 		f := Async(ctx,
 			func() (interface{}, error) {
