@@ -3,11 +3,43 @@ package xgraph // import "github.com/orkestr8/xgraph"
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestFuncReflectPrototype(t *testing.T) {
+
+	type testType struct {
+		name string
+	}
+
+	var f interface{}
+	var ft reflect.Type
+
+	f = func(int64, int, string, []byte, testType, ...testType) (bool, error) {
+		return false, nil
+	}
+	ft = reflect.TypeOf(f)
+	require.Equal(t, reflect.Func, ft.Kind())
+	require.True(t, ft.IsVariadic())
+	require.Equal(t, 6, ft.NumIn())
+	require.Equal(t, 2, ft.NumOut())
+	require.Equal(t, reflect.TypeOf(true), ft.Out(0))
+
+	test := []reflect.Type{
+		reflect.TypeOf(testType{"t0"}),
+		reflect.TypeOf(100),
+		reflect.TypeOf("string2"),
+		reflect.TypeOf(false),
+		reflect.TypeOf("string1"),
+		reflect.TypeOf([]byte("hello")),
+		reflect.TypeOf([]testType{{"t1"}}),
+	}
+	t.Log(test)
+}
 
 func testOrderByContextIndex(a, b Edge) bool {
 	ca := a.Context()
