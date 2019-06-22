@@ -82,22 +82,122 @@ func TestCompileExec(t *testing.T) {
 	g.Associate(sumX, input, ratio, 0) // context is the positional arg index
 	g.Associate(sumY, input, ratio, 1)
 
-	flow, err := DirectedSort(g, input)
+	flowGraph, err := Flow(g, input)
 	require.NoError(t, err)
-	t.Log(flow)
 
-	flowInput := map[Node]chan<- interface{}{}
-	flowOperators := []*future{}
+	flowGraph.Logger = t
 
-	{
+	require.NoError(t, flowGraph.Compile())
+
+	ctx := context.Background()
+
+	require.NoError(t, flowGraph.Run(ctx))
+
+	// Now we've built the graph.  Execute it.
+	done := make(chan interface{})
+	go func() {
+		for k, v := range flowGraph.Output {
+			t.Log("result[", k, "] = ", v.Value())
+		}
+		close(done)
+	}()
+
+	// Set the input
+	require.Equal(t, 5, len(flowGraph.Input))
+	for _, n := range []Node{x1, x2, x3, y1, y2} {
+		require.NotNil(t, flowGraph.Input[n])
 	}
+
+	// Idea: take a map and set the values accordingly
+	flowGraph.SetInput(map[Node]interface{}{
+		x1: "x1v",
+		x2: "x2v",
+		x3: "x3v",
+		y1: "y1v",
+		y2: "y2v",
+	})
+
+	<-done
+
+	require.Equal(t, 1, len(flowGraph.Output))
+
+	var dag Awaitable
+	for _, v := range flowGraph.Output {
+		dag = v
+	}
+
+	require.Equal(t, "ratio( [sumX( [x1v x2v x3v] ) sumY( [x3v y2v y1v] )] )", dag.Value())
+}
+
+type Logger interface {
+	Log(...interface{})
+}
+
+type FlowGraph struct {
+	Logger
+	Graph
+	Kind      EdgeKind
+	Input     map[Node]chan<- interface{}
+	Output    map[Node]Awaitable
+	flow      []Node // topological order
+	runnables []*future
+}
+
+func Flow(g Graph, kind EdgeKind) (*FlowGraph, error) {
+	fg := &FlowGraph{
+		Graph:  g,
+		Kind:   kind,
+		Input:  map[Node]chan<- interface{}{},
+		Output: map[Node]Awaitable{},
+	}
+	flow, err := DirectedSort(g, kind)
+	if err != nil {
+		return nil, err
+	}
+
+	fg.flow = flow
+	return fg, nil
+}
+
+func (fg *FlowGraph) SetInput(m map[Node]interface{}) {
+	for k, v := range m {
+		if ch, has := fg.Input[k]; has {
+			ch <- v
+		}
+	}
+}
+
+func (fg *FlowGraph) Run(ctx context.Context) error {
+	if len(fg.runnables) == 0 {
+		return fmt.Errorf("no futures")
+	}
+	for i := range fg.runnables {
+		fg.runnables[i].doAsync(ctx)
+	}
+	return nil
+}
+
+func (fg *FlowGraph) Compile() error {
+
 	futures := map[Edge]Awaitable{}
+	runnables := []*future{}
+
+	flow := fg.flow
+
 	for i := range flow {
 
 		this := flow[i]
 
-		to := EdgeSlice(g.To(input, this).Edges())
-		from := EdgeSlice(g.From(this, input).Edges())
+		to := EdgeSlice(fg.To(fg.Kind, this).Edges())
+		from := EdgeSlice(fg.From(this, fg.Kind).Edges())
+
+		// No input means this is a Source node whose computation will be input to others
+		// So this is an input node for the graph.
+		var inputChan chan interface{}
+		if len(to) == 0 {
+			inputChan = make(chan interface{}, 1)
+			fg.Input[this] = inputChan
+		}
 
 		// Sort the edges by context[0]
 		SortEdges(to, testOrderByContextIndex)
@@ -109,14 +209,7 @@ func TestCompileExec(t *testing.T) {
 			}
 		}
 
-		// No input means this is a Source node whose computation will be input to others
-		var inputChan chan interface{}
-		if len(input) == 0 {
-			inputChan = make(chan interface{}, 1)
-			flowInput[this] = inputChan
-		}
-
-		t.Log("COMPILE STEP", this, "IN=", to, "OUT=", from, "INPUT=", input)
+		fg.Log("COMPILE STEP", this, "IN=", to, "OUT=", from, "INPUT=", input)
 
 		f := newFuture(func() (interface{}, error) {
 
@@ -153,45 +246,14 @@ func TestCompileExec(t *testing.T) {
 			futures[out] = f
 		}
 
-		flowOperators = append(flowOperators, f)
-	}
+		runnables = append(runnables, f)
 
-	// Now we've built the graph.  Execute it.
-	done := make(chan interface{})
-	go func() {
-		for i := range flowOperators {
-			t.Log("result[", i, "] = ", flowOperators[i].Value())
+		// No output so this node is the terminal node in the graph.
+		if len(from) == 0 {
+			fg.Output[this] = f
 		}
-		close(done)
-	}()
-
-	ctx := context.Background()
-
-	// Start processing
-	for i := range flowOperators {
-		flowOperators[i].doAsync(ctx)
 	}
 
-	// Set the input
-	require.Equal(t, 5, len(flowInput))
-	for _, n := range []Node{x1, x2, x3, y1, y2} {
-		require.NotNil(t, flowInput[n])
-	}
-
-	// Idea: take a map and set the values accordingly
-	for k, v := range map[Node]interface{}{
-		x1: "x1v",
-		x2: "x2v",
-		x3: "x3v",
-		y1: "y1v",
-		y2: "y2v",
-	} {
-		flowInput[k] <- v
-	}
-
-	<-done
-
-	var dag Awaitable = flowOperators[len(flowOperators)-1]
-
-	require.Equal(t, "ratio( [sumX( [x1v x2v x3v] ) sumY( [x3v y2v y1v] )] )", dag.Value())
+	fg.runnables = runnables
+	return nil
 }
