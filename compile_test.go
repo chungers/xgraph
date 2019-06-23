@@ -57,17 +57,45 @@ func testOrderByContextIndex(a, b Edge) bool {
 	return strings.Compare(fmt.Sprintf("%v", a.From().NodeKey()), fmt.Sprintf("%v", b.From().NodeKey())) < 0
 }
 
+type flowData map[Node]Awaitable
+
+func from(edges []Edge) []Node {
+	result := make([]Node, len(edges))
+	for i := range edges {
+		result[i] = edges[i].From()
+	}
+	return result
+}
+
+func (m flowData) matches(gen func() []Node) bool {
+	matches := 0
+	test := gen()
+	for _, n := range test {
+		_, has := m[n]
+		if has {
+			matches++
+		}
+	}
+	return len(m) == len(test)
+}
+
 func TestCompileExec(t *testing.T) {
 
+	print := func(nodeKey interface{}) OperatorFunc {
+		return func(args []interface{}) (interface{}, error) {
+			return fmt.Sprintf("%v(%v)", nodeKey, args), nil
+		}
+	}
+
 	// Ratio(Sum(x1, x2, x3), Sum(x3, y1, y2))
-	x1 := &nodeT{id: "x1"}
-	x2 := &nodeT{id: "x2"}
-	x3 := &nodeT{id: "x3"}
-	y1 := &nodeT{id: "y1"}
-	y2 := &nodeT{id: "y2"}
-	sumX := &nodeT{id: "sumX"}
-	sumY := &nodeT{id: "sumY"}
-	ratio := &nodeT{id: "ratio"}
+	x1 := &nodeT{id: "x1", operator: print("x1")}
+	x2 := &nodeT{id: "x2", operator: print("x2")}
+	x3 := &nodeT{id: "x3", operator: print("x3")}
+	y1 := &nodeT{id: "y1", operator: print("y1")}
+	y2 := &nodeT{id: "y2", operator: print("y2")}
+	sumX := &nodeT{id: "sumX", operator: print("sumX")}
+	sumY := &nodeT{id: "sumY", operator: print("sumY")}
+	ratio := &nodeT{id: "ratio", operator: print("ratio")}
 
 	input := EdgeKind(1)
 
@@ -86,7 +114,7 @@ func TestCompileExec(t *testing.T) {
 	flowGraph, err := NewFlowGraph(g, input)
 	require.NoError(t, err)
 
-	flowGraph.Logger = t
+	flowGraph.Logger = stdout(0)
 	flowGraph.EdgeLessFunc = testOrderByContextIndex
 
 	require.NoError(t, flowGraph.Compile())
@@ -105,11 +133,17 @@ func TestCompileExec(t *testing.T) {
 	var dag Awaitable = (<-output)[ratio]
 	require.NotNil(t, dag)
 
-	require.Equal(t, "ratio( [sumX( [x1v x2v x3v] ) sumY( [x3v y2v y1v] )] )", dag.Value())
+	require.Equal(t, "ratio([sumX([x1([x1v]) x2([x2v]) x3([x3v])]) sumY([x3([x3v]) y2([y2v]) y1([y1v])])])", dag.Value())
 }
 
 type Logger interface {
 	Log(...interface{})
+}
+
+type stdout int
+
+func (s stdout) Log(args ...interface{}) {
+	fmt.Println(args...)
 }
 
 type FlowID int64
@@ -121,6 +155,15 @@ type work struct {
 	id       FlowID
 	from     Node
 	callback chan map[Node]Awaitable
+}
+type edgeSlice []Edge
+
+func (s edgeSlice) From() (from []Node) {
+	from = make([]Node, len(s))
+	for i := range s {
+		from[i] = s[i].From()
+	}
+	return
 }
 
 type FlowGraph struct {
@@ -157,13 +200,22 @@ func NewFlowGraph(g Graph, kind EdgeKind) (*FlowGraph, error) {
 func (fg *FlowGraph) Run(ctx context.Context, args map[Node]interface{}) (<-chan map[Node]Awaitable, error) {
 	callback := make(chan map[Node]Awaitable)
 	id := FlowID(time.Now().UnixNano())
+
+	fg.Log(id, "Run with input", args)
+
 	for k, v := range args {
 		if ch, has := fg.input[k]; has {
+			source := k
+			arg := v
 			ch <- work{
-				ctx:       ctx,
-				id:        id,
-				callback:  callback,
-				Awaitable: Async(ctx, func() (interface{}, error) { return v, nil }),
+				ctx:      ctx,
+				id:       id,
+				from:     source,
+				callback: callback,
+				Awaitable: Async(ctx, func() (interface{}, error) {
+					fg.Log(id, source, "Exec with value=", arg)
+					return arg, nil
+				}),
 			}
 		} else {
 			return nil, fmt.Errorf("not an input node %v", k)
@@ -196,7 +248,7 @@ func (fg *FlowGraph) Compile() error {
 		if len(from) == 0 {
 			// This node has no edges to other nodes. So it's terminal
 			// so we collect its output to send the graph's collector.
-			ch := make(chan work, 1)
+			ch := make(chan work)
 			fg.output[this] = ch
 			go func() {
 				for {
@@ -219,69 +271,93 @@ func (fg *FlowGraph) Compile() error {
 		aggregator := make(chan work)
 		go func() {
 
-			pending := map[FlowID]map[Node]Awaitable{}
+			pending := map[FlowID]flowData{}
+
 		node_aggregator:
 			for {
 				w, ok := <-aggregator
 				if !ok {
 					return
 				}
+				fg.Log(w.id, this, "Got work", w)
 				// match messages by flow id.
 				inputMap, has := pending[w.id]
 				if !has {
-					inputMap = map[Node]Awaitable{w.from: w}
+					inputMap = flowData{}
 					pending[w.id] = inputMap
 				}
 				if _, has := inputMap[w.from]; has {
-					fg.Log("Duplicate awaitable for %v. Ignored.", w.from)
-					continue node_aggregator
+					fg.Log(w.id, this, "Duplicate awaitable for", w.from, "Ignored. input=", inputMap)
 				}
 				inputMap[w.from] = w
-				// Now check for all input are present. If so, build the output
-				matches := 0
-				for i := range to {
-					if _, has := inputMap[to[i].From()]; has {
-						matches++
-					}
-				}
-				if matches != len(to) {
+
+				if len(to) > 0 && !inputMap.matches(edgeSlice(to).From) {
 					// Nothing to do... just wait for message to come
+					fg.Log(w.id, this, "Keep waiting for more")
 					continue node_aggregator
 				}
+
+				fg.Log(w.id, this, "Got all input", inputMap, "given", to)
+
 				// Now inputs are collected.  Build another future and pass it on.
 				// TODO - context with timeout
+				if w.ctx == nil {
+					panic("nil ctx")
+				}
+
 				ctx := w.ctx
+				received := w
 
 				future := Async(ctx, func() (interface{}, error) {
 
-					// Wait for all inputs to complete computation and build args
-					// for this node before proceeding with this node's computation.
-					args := []interface{}{}
-					for i := range to {
-						future := inputMap[to[i].From()]
-
-						// Calling the Value or Error will block until completion
-						if err := future.Error(); err != nil {
-							// TODO - chain errors
-							return nil, err
-						}
-						args = append(args, future.Value())
+					if len(to) == 0 {
 					}
+
+					args := []interface{}{}
+					if len(to) > 0 {
+						// Wait for all inputs to complete computation and build args
+						// for this node before proceeding with this node's computation.
+						for i := range to {
+							future := inputMap[to[i].From()]
+
+							if future == nil {
+								panic(fmt.Errorf("%v : Missing future for %v", this, to[i]))
+							}
+							// Calling the Value or Error will block until completion
+							// TODO - a stuck future will lock this entirely. Add deadline.
+							if err := future.Error(); err != nil {
+								// TODO - chain errors
+								fg.Log(w.id, this, "Running and got error", err)
+								return nil, err
+							}
+							args = append(args, future.Value())
+						}
+					} else {
+						args = append(args, received.Value())
+					}
+
+					// TODO - Do something by looking at the signature of the operator
+					// to allow injection for nodes with no inputs or type matching.
 
 					// Call the actual function with the args
-					if len(args) == 0 {
-						return this.NodeKey(), nil
+					if operator, is := this.(Operator); is {
+						return operator.OperatorFunc()(args)
 					}
-					return fmt.Sprintf("%v(%v)", this.NodeKey(), args), nil
+					result := fmt.Sprintf("call_%v(%v)", this.NodeKey(), args)
+					fg.Log(w.id, this, "Returning result", result)
+					return result, nil
 				})
 
-				result := work{id: w.id, from: this, Awaitable: future, callback: w.callback}
+				result := work{ctx: w.ctx, id: w.id, from: this, Awaitable: future, callback: w.callback}
 
 				if len(outbound) == 0 {
+					fg.Log(w.id, this, "Sending graph output", result, "output", fg.output[this])
 					// write to the graph's output
 					fg.output[this] <- result
+					fg.Log(w.id, this, "Sent graph output")
 				} else {
 					// write to downstream nodes
+					fg.Log(w.id, this, "Sending result downstream", result)
 					for _, ch := range outbound {
 						ch <- result
 					}
@@ -295,7 +371,7 @@ func (fg *FlowGraph) Compile() error {
 		if len(to) == 0 {
 			// No input means this is a Source node whose computation will be input to others
 			// So this is an input node for the graph.
-			inputChan := make(chan work, 1)
+			inputChan := make(chan work)
 			fg.input[this] = inputChan
 
 			// This input channel will send work directly to the aggregator
@@ -335,7 +411,7 @@ func (fg *FlowGraph) Compile() error {
 
 	// Start the aggregator
 	go func() {
-		pending := map[FlowID]map[Node]Awaitable{}
+		pending := map[FlowID]flowData{}
 	graph_aggregator:
 		for {
 			w, ok := <-fg.aggregator
@@ -343,25 +419,40 @@ func (fg *FlowGraph) Compile() error {
 				return
 			}
 
-			output, has := pending[w.id]
-			if !has {
-				pending[w.id] = map[Node]Awaitable{
-					w.from: w,
+			fg.Log(w.id, fg.output, "Graph aggreagator got work", w)
+
+			// If there are multiple output nodes then we have to collect.
+			output := pending[w.id]
+
+			if len(fg.output) > 0 {
+
+				if output == nil {
+					output = flowData{
+						w.from: w,
+					}
+					pending[w.id] = output
 				}
-				continue graph_aggregator
+
+				if !output.matches(func() (result []Node) {
+					result = []Node{}
+					for k := range fg.output {
+						result = append(result, k)
+					}
+					return
+				}) {
+					continue graph_aggregator
+				}
 			}
 
-			// check completion
-			match := 0
-			for k := range fg.output {
-				if _, has := output[k]; has {
-					match++
-				}
+			fg.Log(w.id, "Collected all outputs", output)
+			delete(pending, w.id)
+			fg.Log(w.id, "Sending graph output", output)
+			if w.callback == nil {
+				panic("nil callback")
 			}
-			if match == len(fg.output) {
-				delete(pending, w.id)
-				w.callback <- output
-			}
+			w.callback <- output
+			fg.Log(w.id, "Sent output", output)
+			close(w.callback)
 		}
 	}()
 	return nil

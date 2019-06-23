@@ -8,6 +8,12 @@ type Node interface {
 	NodeKeyer
 }
 
+type OperatorFunc func([]interface{}) (interface{}, error)
+
+type Operator interface {
+	OperatorFunc() OperatorFunc
+}
+
 type Contexter interface {
 	Context() []interface{}
 }

@@ -3,8 +3,13 @@ package xgraph // import "github.com/orkestr8/xgraph"
 type intNode int64
 
 type nodeT struct {
-	id     string
-	custom interface{}
+	id       string
+	custom   interface{}
+	operator func([]interface{}) (interface{}, error)
+}
+
+func (n *nodeT) OperatorFunc() OperatorFunc {
+	return n.operator
 }
 
 func (n *nodeT) NodeKey() NodeKey {
