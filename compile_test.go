@@ -82,10 +82,11 @@ func TestCompileExec(t *testing.T) {
 	g.Associate(sumX, input, ratio, 0) // context is the positional arg index
 	g.Associate(sumY, input, ratio, 1)
 
-	flowGraph, err := Flow(g, input)
+	flowGraph, err := NewFlowGraph(g, input)
 	require.NoError(t, err)
 
 	flowGraph.Logger = t
+	flowGraph.EdgeLessFunc = testOrderByContextIndex
 
 	require.NoError(t, flowGraph.Compile())
 
@@ -108,6 +109,8 @@ func TestCompileExec(t *testing.T) {
 		require.NotNil(t, flowGraph.Input[n])
 	}
 
+	t.Log("Setting input")
+
 	// Idea: take a map and set the values accordingly
 	flowGraph.SetInput(map[Node]interface{}{
 		x1: "x1v",
@@ -119,12 +122,10 @@ func TestCompileExec(t *testing.T) {
 
 	<-done
 
-	require.Equal(t, 1, len(flowGraph.Output))
+	t.Log("Done execute graph")
 
-	var dag Awaitable
-	for _, v := range flowGraph.Output {
-		dag = v
-	}
+	var dag Awaitable = flowGraph.Output[ratio]
+	require.NotNil(t, dag)
 
 	require.Equal(t, "ratio( [sumX( [x1v x2v x3v] ) sumY( [x3v y2v y1v] )] )", dag.Value())
 }
@@ -136,14 +137,16 @@ type Logger interface {
 type FlowGraph struct {
 	Logger
 	Graph
-	Kind      EdgeKind
-	Input     map[Node]chan<- interface{}
-	Output    map[Node]Awaitable
+	Kind         EdgeKind
+	Input        map[Node]chan<- interface{}
+	Output       map[Node]Awaitable
+	EdgeLessFunc func(a, b Edge) bool // returns True if a < b
+
 	flow      []Node // topological order
 	runnables []*future
 }
 
-func Flow(g Graph, kind EdgeKind) (*FlowGraph, error) {
+func NewFlowGraph(g Graph, kind EdgeKind) (*FlowGraph, error) {
 	fg := &FlowGraph{
 		Graph:  g,
 		Kind:   kind,
@@ -178,7 +181,6 @@ func (fg *FlowGraph) Run(ctx context.Context) error {
 }
 
 func (fg *FlowGraph) Compile() error {
-
 	futures := map[Edge]Awaitable{}
 	runnables := []*future{}
 
@@ -202,16 +204,18 @@ func (fg *FlowGraph) Compile() error {
 		// Sort the edges by context[0]
 		SortEdges(to, testOrderByContextIndex)
 
-		input := []Awaitable{}
-		for _, in := range to {
-			if f, has := futures[in]; has {
-				input = append(input, f)
+		fg.Log("COMPILE STEP", this, "IN=", to, "OUT=", from)
+
+		nodeOperator := func() (interface{}, error) {
+
+			input := []Awaitable{}
+			for _, in := range to {
+				if f, has := futures[in]; has {
+					input = append(input, f)
+				}
 			}
-		}
 
-		fg.Log("COMPILE STEP", this, "IN=", to, "OUT=", from, "INPUT=", input)
-
-		f := newFuture(func() (interface{}, error) {
+			fg.Log("EXEC STEP", this, "IN=", to, "OUT=", from, "INPUT=", input)
 
 			// Given input in array of awaitable...
 			args := []interface{}{}
@@ -224,12 +228,10 @@ func (fg *FlowGraph) Compile() error {
 				}
 			}
 
-			// t.Log("RUNNING - CUR", this, "IN=", to, "OUT=", from, "ARGS=", args)
-
 			// Call the actual function
 			// Just print the operator
 			out := fmt.Sprintf("%v", this.NodeKey())
-			if len(input) > 0 {
+			if len(args) > 0 {
 				out = fmt.Sprintf("%v( %v )", this.NodeKey(), args)
 			} else if inputChan != nil {
 
@@ -240,8 +242,12 @@ func (fg *FlowGraph) Compile() error {
 			}
 
 			return out, nil
-		})
+		}
 
+		f := newFuture(nodeOperator)
+
+		// Index this node's output by outbound Edge,
+		// so nodes down stream can use as input
 		for _, out := range from {
 			futures[out] = f
 		}
