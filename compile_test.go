@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -92,39 +93,16 @@ func TestCompileExec(t *testing.T) {
 
 	ctx := context.Background()
 
-	require.NoError(t, flowGraph.Run(ctx))
-
-	// Now we've built the graph.  Execute it.
-	done := make(chan interface{})
-	go func() {
-		for k, v := range flowGraph.Output {
-			t.Log("result[", k, "] = ", v.Value())
-		}
-		close(done)
-	}()
-
-	// Set the input
-	require.Equal(t, 5, len(flowGraph.Input))
-	for _, n := range []Node{x1, x2, x3, y1, y2} {
-		require.NotNil(t, flowGraph.Input[n])
-	}
-
-	t.Log("Setting input")
-
-	// Idea: take a map and set the values accordingly
-	flowGraph.SetInput(map[Node]interface{}{
+	output, err := flowGraph.Run(ctx, map[Node]interface{}{
 		x1: "x1v",
 		x2: "x2v",
 		x3: "x3v",
 		y1: "y1v",
 		y2: "y2v",
 	})
+	require.NoError(t, err)
 
-	<-done
-
-	t.Log("Done execute graph")
-
-	var dag Awaitable = flowGraph.Output[ratio]
+	var dag Awaitable = (<-output)[ratio]
 	require.NotNil(t, dag)
 
 	require.Equal(t, "ratio( [sumX( [x1v x2v x3v] ) sumY( [x3v y2v y1v] )] )", dag.Value())
@@ -134,24 +112,38 @@ type Logger interface {
 	Log(...interface{})
 }
 
+type FlowID int64
+
+type work struct {
+	Awaitable
+
+	ctx      context.Context
+	id       FlowID
+	from     Node
+	callback chan map[Node]Awaitable
+}
+
 type FlowGraph struct {
 	Logger
 	Graph
 	Kind         EdgeKind
-	Input        map[Node]chan<- interface{}
-	Output       map[Node]Awaitable
 	EdgeLessFunc func(a, b Edge) bool // returns True if a < b
 
-	flow      []Node // topological order
-	runnables []*future
+	flow       []Node // topological order
+	links      []chan work
+	input      map[Node]chan<- work
+	output     map[Node]chan work
+	aggregator chan work
 }
 
 func NewFlowGraph(g Graph, kind EdgeKind) (*FlowGraph, error) {
 	fg := &FlowGraph{
-		Graph:  g,
-		Kind:   kind,
-		Input:  map[Node]chan<- interface{}{},
-		Output: map[Node]Awaitable{},
+		Graph:      g,
+		Kind:       kind,
+		links:      []chan work{},
+		input:      map[Node]chan<- work{},
+		output:     map[Node]chan work{},
+		aggregator: make(chan work),
 	}
 	flow, err := DirectedSort(g, kind)
 	if err != nil {
@@ -162,28 +154,27 @@ func NewFlowGraph(g Graph, kind EdgeKind) (*FlowGraph, error) {
 	return fg, nil
 }
 
-func (fg *FlowGraph) SetInput(m map[Node]interface{}) {
-	for k, v := range m {
-		if ch, has := fg.Input[k]; has {
-			ch <- v
+func (fg *FlowGraph) Run(ctx context.Context, args map[Node]interface{}) (<-chan map[Node]Awaitable, error) {
+	callback := make(chan map[Node]Awaitable)
+	id := FlowID(time.Now().UnixNano())
+	for k, v := range args {
+		if ch, has := fg.input[k]; has {
+			ch <- work{
+				ctx:       ctx,
+				id:        id,
+				callback:  callback,
+				Awaitable: Async(ctx, func() (interface{}, error) { return v, nil }),
+			}
+		} else {
+			return nil, fmt.Errorf("not an input node %v", k)
 		}
 	}
-}
-
-func (fg *FlowGraph) Run(ctx context.Context) error {
-	if len(fg.runnables) == 0 {
-		return fmt.Errorf("no futures")
-	}
-	for i := range fg.runnables {
-		fg.runnables[i].doAsync(ctx)
-	}
-	return nil
+	return callback, nil
 }
 
 func (fg *FlowGraph) Compile() error {
-	futures := map[Edge]Awaitable{}
-	runnables := []*future{}
 
+	edgeChannels := map[Edge]chan work{}
 	flow := fg.flow
 
 	for i := range flow {
@@ -193,73 +184,185 @@ func (fg *FlowGraph) Compile() error {
 		to := EdgeSlice(fg.To(fg.Kind, this).Edges())
 		from := EdgeSlice(fg.From(this, fg.Kind).Edges())
 
-		// No input means this is a Source node whose computation will be input to others
-		// So this is an input node for the graph.
-		var inputChan chan interface{}
-		if len(to) == 0 {
-			inputChan = make(chan interface{}, 1)
-			fg.Input[this] = inputChan
+		// Build the output first.  For each output edge
+		// we create a work channel for downstream node to receive
+		outbound := map[Edge]chan<- work{}
+		for i := range from {
+			ch := make(chan work)
+			fg.links = append(fg.links, ch)
+			outbound[from[i]] = ch
+			edgeChannels[from[i]] = ch // to be looked up by downstream
+		}
+		if len(from) == 0 {
+			// This node has no edges to other nodes. So it's terminal
+			// so we collect its output to send the graph's collector.
+			ch := make(chan work, 1)
+			fg.output[this] = ch
+			go func() {
+				for {
+					w, ok := <-ch
+					if !ok {
+						return
+					}
+					fg.aggregator <- w
+				}
+			}()
 		}
 
 		// Sort the edges by context[0]
-		SortEdges(to, testOrderByContextIndex)
+		SortEdges(to, fg.EdgeLessFunc)
+
+		// Create links based on input and output edges:
+
+		// For input, we need one more aggregation channel
+		// that collects all the input for the given flow id.
+		aggregator := make(chan work)
+		go func() {
+
+			pending := map[FlowID]map[Node]Awaitable{}
+		node_aggregator:
+			for {
+				w, ok := <-aggregator
+				if !ok {
+					return
+				}
+				// match messages by flow id.
+				inputMap, has := pending[w.id]
+				if !has {
+					inputMap = map[Node]Awaitable{w.from: w}
+					pending[w.id] = inputMap
+				}
+				if _, has := inputMap[w.from]; has {
+					fg.Log("Duplicate awaitable for %v. Ignored.", w.from)
+					continue node_aggregator
+				}
+				inputMap[w.from] = w
+				// Now check for all input are present. If so, build the output
+				matches := 0
+				for i := range to {
+					if _, has := inputMap[to[i].From()]; has {
+						matches++
+					}
+				}
+				if matches != len(to) {
+					// Nothing to do... just wait for message to come
+					continue node_aggregator
+				}
+				// Now inputs are collected.  Build another future and pass it on.
+				// TODO - context with timeout
+				ctx := w.ctx
+
+				future := Async(ctx, func() (interface{}, error) {
+
+					// Wait for all inputs to complete computation and build args
+					// for this node before proceeding with this node's computation.
+					args := []interface{}{}
+					for i := range to {
+						future := inputMap[to[i].From()]
+
+						// Calling the Value or Error will block until completion
+						if err := future.Error(); err != nil {
+							// TODO - chain errors
+							return nil, err
+						}
+						args = append(args, future.Value())
+					}
+
+					// Call the actual function with the args
+					if len(args) == 0 {
+						return this.NodeKey(), nil
+					}
+					return fmt.Sprintf("%v(%v)", this.NodeKey(), args), nil
+				})
+
+				result := work{id: w.id, from: this, Awaitable: future, callback: w.callback}
+
+				if len(outbound) == 0 {
+					// write to the graph's output
+					fg.output[this] <- result
+				} else {
+					// write to downstream nodes
+					for _, ch := range outbound {
+						ch <- result
+					}
+				}
+
+				// remove from pending
+				delete(pending, w.id)
+			}
+		}()
+
+		if len(to) == 0 {
+			// No input means this is a Source node whose computation will be input to others
+			// So this is an input node for the graph.
+			inputChan := make(chan work, 1)
+			fg.input[this] = inputChan
+
+			// This input channel will send work directly to the aggregator
+			go func() {
+				for {
+					w, ok := <-inputChan
+					if !ok {
+						return
+					}
+					aggregator <- w
+				}
+			}()
+		} else {
+			// For each input edge, we should have already created
+			// the channel to send work, because the nodes are topologically sorted.
+			for i := range to {
+
+				ch, has := edgeChannels[to[i]]
+				if !has {
+					return fmt.Errorf("No work channel for inbound edge: %v", to[i])
+				}
+				// Start receiving from input
+				go func() {
+					for {
+						w, ok := <-ch
+						if !ok {
+							return
+						}
+						aggregator <- w
+					}
+				}()
+			}
+		}
 
 		fg.Log("COMPILE STEP", this, "IN=", to, "OUT=", from)
-
-		nodeOperator := func() (interface{}, error) {
-
-			input := []Awaitable{}
-			for _, in := range to {
-				if f, has := futures[in]; has {
-					input = append(input, f)
-				}
-			}
-
-			fg.Log("EXEC STEP", this, "IN=", to, "OUT=", from, "INPUT=", input)
-
-			// Given input in array of awaitable...
-			args := []interface{}{}
-
-			for i := range input {
-				if err := input[i].Error(); err != nil {
-					return nil, err
-				} else {
-					args = append(args, input[i].Value())
-				}
-			}
-
-			// Call the actual function
-			// Just print the operator
-			out := fmt.Sprintf("%v", this.NodeKey())
-			if len(args) > 0 {
-				out = fmt.Sprintf("%v( %v )", this.NodeKey(), args)
-			} else if inputChan != nil {
-
-				defer close(inputChan)
-
-				v := <-inputChan
-				out = fmt.Sprintf("%v", v)
-			}
-
-			return out, nil
-		}
-
-		f := newFuture(nodeOperator)
-
-		// Index this node's output by outbound Edge,
-		// so nodes down stream can use as input
-		for _, out := range from {
-			futures[out] = f
-		}
-
-		runnables = append(runnables, f)
-
-		// No output so this node is the terminal node in the graph.
-		if len(from) == 0 {
-			fg.Output[this] = f
-		}
 	}
 
-	fg.runnables = runnables
+	// Start the aggregator
+	go func() {
+		pending := map[FlowID]map[Node]Awaitable{}
+	graph_aggregator:
+		for {
+			w, ok := <-fg.aggregator
+			if !ok {
+				return
+			}
+
+			output, has := pending[w.id]
+			if !has {
+				pending[w.id] = map[Node]Awaitable{
+					w.from: w,
+				}
+				continue graph_aggregator
+			}
+
+			// check completion
+			match := 0
+			for k := range fg.output {
+				if _, has := output[k]; has {
+					match++
+				}
+			}
+			if match == len(fg.output) {
+				delete(pending, w.id)
+				w.callback <- output
+			}
+		}
+	}()
 	return nil
 }
