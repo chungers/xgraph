@@ -121,12 +121,14 @@ func TestCompileExec(t *testing.T) {
 
 	ctx := context.Background()
 
+	require.Equal(t, x1, g.Node(NodeKey("x1")))
+
 	output, err := flowGraph.Run(ctx, map[Node]interface{}{
-		x1: "x1v",
-		x2: "x2v",
-		x3: "x3v",
-		y1: "y1v",
-		y2: "y2v",
+		g.Node(NodeKey("x1")): "x1v",
+		x2:                    "x2v",
+		x3:                    "x3v",
+		y1:                    "y1v",
+		y2:                    "y2v",
 	})
 	require.NoError(t, err)
 
