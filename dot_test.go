@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"gonum.org/v1/gonum/graph/encoding"
 )
 
 func testDataVpc(t *testing.T) Graph {
@@ -180,9 +179,6 @@ func TestEncodeDot(t *testing.T) {
 
 	g := Builder(Options{})
 	g.Add(A, B, C, D)
-
-	_, is := g.(*graph).Node(0).(encoding.Attributer)
-	require.True(t, is)
 
 	g.Associate(A, likes, B)
 	g.Associate(A, likes, C)
