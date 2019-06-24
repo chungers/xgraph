@@ -79,8 +79,7 @@ func (m flowData) matches(gen func() []Node) bool {
 	return len(m) == len(test)
 }
 
-func TestCompileExec(t *testing.T) {
-
+func testBuildGraph(input EdgeKind) Graph {
 	print := func(nodeKey interface{}) OperatorFunc {
 		return func(args []interface{}) (interface{}, error) {
 			return fmt.Sprintf("%v(%v)", nodeKey, args), nil
@@ -97,8 +96,6 @@ func TestCompileExec(t *testing.T) {
 	sumY := &nodeT{id: "sumY", operator: print("sumY")}
 	ratio := &nodeT{id: "ratio", operator: print("ratio")}
 
-	input := EdgeKind(1)
-
 	g := Builder(Options{})
 	g.Add(x1, x2, x3, y1, y2, sumX, sumY, ratio)
 
@@ -110,6 +107,48 @@ func TestCompileExec(t *testing.T) {
 	g.Associate(x3, input, sumY, 0)
 	g.Associate(sumX, input, ratio, 0) // context is the positional arg index
 	g.Associate(sumY, input, ratio, 1)
+	return g
+}
+
+func BenchmarkCompileExec(b *testing.B) {
+	input := EdgeKind(1)
+	g := testBuildGraph(input)
+
+	flowGraph, err := NewFlowGraph(g, input)
+	if err != nil {
+		panic(err)
+	}
+
+	flowGraph.Logger = stdout(0)
+	flowGraph.EdgeLessFunc = testOrderByContextIndex
+
+	err = flowGraph.Compile()
+	if err != nil {
+		panic(err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		ctx := context.Background()
+		output, err := flowGraph.Run(ctx, map[Node]interface{}{
+			g.Node(NodeKey("x1")): "x1v",
+			g.Node("x2"):          "x2v",
+			g.Node("x3"):          "x3v",
+			g.Node("y1"):          "y1v",
+			g.Node("y2"):          "y2v",
+		})
+		if err != nil {
+			panic(err)
+		}
+
+		var dag Awaitable = (<-output)[g.Node("ratio")]
+		dag.Value()
+	}
+}
+
+func TestCompileExec(t *testing.T) {
+
+	input := EdgeKind(1)
+	g := testBuildGraph(input)
 
 	flowGraph, err := NewFlowGraph(g, input)
 	require.NoError(t, err)
@@ -121,18 +160,16 @@ func TestCompileExec(t *testing.T) {
 
 	ctx := context.Background()
 
-	require.Equal(t, x1, g.Node(NodeKey("x1")))
-
 	output, err := flowGraph.Run(ctx, map[Node]interface{}{
 		g.Node(NodeKey("x1")): "x1v",
-		x2:                    "x2v",
-		x3:                    "x3v",
-		y1:                    "y1v",
-		y2:                    "y2v",
+		g.Node("x2"):          "x2v",
+		g.Node("x3"):          "x3v",
+		g.Node("y1"):          "y1v",
+		g.Node("y2"):          "y2v",
 	})
 	require.NoError(t, err)
 
-	var dag Awaitable = (<-output)[ratio]
+	var dag Awaitable = (<-output)[g.Node("ratio")]
 	require.NotNil(t, dag)
 
 	require.Equal(t, "ratio([sumX([x1([x1v]) x2([x2v]) x3([x3v])]) sumY([x3([x3v]) y2([y2v]) y1([y1v])])])", dag.Value())
