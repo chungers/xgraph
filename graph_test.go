@@ -72,6 +72,11 @@ func TestAdd(t *testing.T) {
 	for _, n := range []Node{plus, minus, A, B, C} {
 		require.NotNil(t, g.Node(n.NodeKey()))
 	}
+
+	// We should expect the references to be the same
+	require.Equal(t, A, g.Node("A"))
+	require.Equal(t, B, g.Node("B"))
+	require.Equal(t, C, g.Node("C"))
 }
 
 func TestAssociate(t *testing.T) {

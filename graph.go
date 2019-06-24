@@ -105,7 +105,10 @@ func (g *graph) Node(k NodeKey) Node {
 	g.lock.RLock()
 	defer g.lock.RUnlock()
 
-	return g.nodeKeys[k]
+	if n, has := g.nodeKeys[k]; has {
+		return n.Node
+	}
+	return nil
 }
 
 func (g *graph) directedGraph(kind EdgeKind) *directed {
