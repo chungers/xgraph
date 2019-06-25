@@ -182,6 +182,9 @@ type Logger interface {
 type stdout int
 
 func (s stdout) Log(args ...interface{}) {
+	if s == 0 {
+		return
+	}
 	fmt.Println(args...)
 }
 

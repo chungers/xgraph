@@ -147,8 +147,8 @@ func TestEncoderDotVpc(t *testing.T) {
 
 	buff, err := RenderDot(g, dotOptions)
 	require.NoError(t, err)
-	fmt.Println(string(buff))
-
+	//fmt.Println(string(buff))
+	t.Log(string(buff))
 }
 
 func TestEncodeDot(t *testing.T) {
@@ -211,7 +211,8 @@ func TestEncodeDot(t *testing.T) {
 
 	buff, err := RenderDot(g, dotOptions)
 	require.NoError(t, err)
-	fmt.Println(string(buff))
+	//fmt.Println(string(buff))
+	t.Log(string(buff))
 
 	dotOptions.EdgeLabelers = nil
 	_, err = RenderDot(g, dotOptions)
