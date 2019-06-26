@@ -146,7 +146,7 @@ func TestEncoderDotVpc(t *testing.T) {
 		NodeLabelers: map[Node]NodeLabeler{},
 	}
 
-	buff, err := RenderDot(g, dotOptions)
+	buff, err := EncodeDot(g, dotOptions)
 	require.NoError(t, err)
 	fmt.Println(string(buff))
 
@@ -208,7 +208,7 @@ strict digraph V {
 		EdgeLabelers: map[Edge]EdgeLabeler{},
 		NodeLabelers: map[Node]NodeLabeler{},
 	}
-	view, err := RenderDot(g, dotOptions)
+	view, err := EncodeDot(g, dotOptions)
 	require.NoError(t, err)
 	t.Log(string(view))
 }
@@ -273,11 +273,11 @@ func TestEncodeDot(t *testing.T) {
 		return fmt.Sprintf("%v %v %v", e.From(), dotOptions.Edges[e.Kind()], e.To())
 	}
 
-	buff, err := RenderDot(g, dotOptions)
+	buff, err := EncodeDot(g, dotOptions)
 	require.NoError(t, err)
 	fmt.Println(string(buff))
 
 	dotOptions.EdgeLabelers = nil
-	_, err = RenderDot(g, dotOptions)
+	_, err = EncodeDot(g, dotOptions)
 	require.NoError(t, err)
 }

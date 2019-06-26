@@ -10,6 +10,40 @@ import (
 	"gonum.org/v1/gonum/graph/simple"
 )
 
+// dotNode is a view of the Node.  It implements dot related methods
+// and for labeling purposes.  It also implements the Setter interfaces
+// called when decoding a dotfile.
+//
+// This implementation of Node interface is provided because the typical
+// usage of the xgraph API is for user to provide their own types that
+// implement the Node interface.  When parsing dotfile, this type is
+// used as the default implementation.
+type dotNode struct {
+	key        NodeKey
+	id         int64
+	attributes map[string]string
+}
+
+func (n *dotNode) SetDOTID(id string) {
+	n.key = NodeKey(id)
+}
+
+func (n dotNode) ID() int64 {
+	return int64(n.id)
+}
+
+func (n dotNode) NodeKey() NodeKey {
+	return n.key
+}
+
+func (n dotNode) SetAttribute(attr encoding.Attribute) error {
+	if n.attributes == nil {
+		n.attributes = map[string]string{}
+	}
+	n.attributes[attr.Key] = attr.Value
+	return nil
+}
+
 type dotSubgraph struct {
 	*directed
 	DotOptions
@@ -59,6 +93,10 @@ type dotGraph struct {
 	xg *graph
 }
 
+func (dg *dotGraph) Node(id int64) gonum.Node {
+	return dg.Directed.Node(id)
+}
+
 func (dg *dotGraph) DOTID() string {
 	id := dg.Name
 	if id == "" {
@@ -97,12 +135,15 @@ func (dg *dotGraph) Structure() []dot.Graph {
 	return subs
 }
 
-func RenderDot(g Graph, options DotOptions) ([]byte, error) {
+func EncodeDot(g Graph, options DotOptions) ([]byte, error) {
 
 	xg, is := g.(*graph)
 	if !is {
 		return nil, ErrNotSupported{g}
 	}
+
+	// TODO - replace all this setting of labels with
+	// a wrapper dotNode that has the labeler.
 
 	// Set any EdgeLabelers to customize labels for Edges
 	count := 0
@@ -170,32 +211,6 @@ type dotBuilder struct {
 	gonum.Graph
 	kind EdgeKind
 	xg   *graph
-}
-
-type dotNode struct {
-	key        NodeKey
-	id         int64
-	attributes map[string]string
-}
-
-func (n *dotNode) SetDOTID(id string) {
-	n.key = NodeKey(id)
-}
-
-func (n dotNode) ID() int64 {
-	return int64(n.id)
-}
-
-func (n dotNode) NodeKey() NodeKey {
-	return n.key
-}
-
-func (n dotNode) SetAttribute(attr encoding.Attribute) error {
-	if n.attributes == nil {
-		n.attributes = map[string]string{}
-	}
-	n.attributes[attr.Key] = attr.Value
-	return nil
 }
 
 func (b *dotBuilder) NewNode() gonum.Node {
