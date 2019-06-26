@@ -9,10 +9,9 @@ import (
 type graph struct {
 	Options
 
-	nextID    *nodeID
-	directed  map[EdgeKind]*directed
-	nodeKeys  map[interface{}]*node
-	edgeViews map[*edge]*edgeView
+	nextID   *nodeID
+	directed map[EdgeKind]*directed
+	nodeKeys map[interface{}]*node
 
 	lock sync.RWMutex
 }
@@ -32,11 +31,10 @@ func (n *nodeID) get() (v int64) {
 
 func newGraph(options Options) *graph {
 	return &graph{
-		nextID:    &nodeID{value: options.NodeIDOffset},
-		Options:   options,
-		nodeKeys:  map[interface{}]*node{},
-		directed:  map[EdgeKind]*directed{},
-		edgeViews: map[*edge]*edgeView{},
+		nextID:   &nodeID{value: options.NodeIDOffset},
+		Options:  options,
+		nodeKeys: map[interface{}]*node{},
+		directed: map[EdgeKind]*directed{},
 	}
 }
 
@@ -131,25 +129,6 @@ func (g *graph) Associate(from Node, kind EdgeKind, to Node, optionalContext ...
 	return g.directedGraph(kind).associate(fromNode, toNode, optionalContext...), nil
 }
 
-func (g *graph) edgeViewGet(edge *edge) *edgeView {
-	g.lock.RLock()
-	defer g.lock.RUnlock()
-	return g.edgeViews[edge]
-}
-
-func (g *graph) edgeView(edge *edge) *edgeView {
-	v := g.edgeViewGet(edge)
-	if v != nil {
-		return v
-	}
-	g.lock.Lock()
-	g.lock.Unlock()
-
-	v = &edgeView{edge}
-	g.edgeViews[edge] = v
-	return v
-}
-
 func (g *graph) Edge(from Node, kind EdgeKind, to Node) Edge {
 	directed, has := g.directed[kind]
 	if !has {
@@ -160,8 +139,7 @@ func (g *graph) Edge(from Node, kind EdgeKind, to Node) Edge {
 	if args[0] == nil || args[1] == nil {
 		return nil
 	}
-
-	return g.edgeView(directed.edges[directed.Edge(args[0].ID(), args[1].ID())])
+	return directed.edges[directed.Edge(args[0].ID(), args[1].ID())]
 }
 
 func (g *graph) From(from Node, kind EdgeKind) NodesOrEdges {
@@ -267,12 +245,12 @@ func (g *graph) findEdges(kind EdgeKind, x Node, to bool, checks []func(Edge) bo
 				break
 			}
 
-			var eval *edgeView
+			var eval *edge
 
 			if to {
-				eval = g.edgeView(directed.edges[directed.Edge(result.Node().ID(), arg.ID())])
+				eval = directed.edges[directed.Edge(result.Node().ID(), arg.ID())]
 			} else {
-				eval = g.edgeView(directed.edges[directed.Edge(arg.ID(), result.Node().ID())])
+				eval = directed.edges[directed.Edge(arg.ID(), result.Node().ID())]
 			}
 
 			if len(checks) == 0 {

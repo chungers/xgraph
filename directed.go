@@ -26,7 +26,7 @@ type directed struct {
 	lock sync.RWMutex
 }
 
-func (d *directed) associate(fromNode, toNode *node, optionalContext ...interface{}) *edgeView {
+func (d *directed) associate(fromNode, toNode *node, optionalContext ...interface{}) *edge {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -38,16 +38,16 @@ func (d *directed) associate(fromNode, toNode *node, optionalContext ...interfac
 	}
 
 	ed := &edge{
-		Edge:    d.NewEdge(fromNode, toNode),
+		gonum:   d.NewEdge(fromNode, toNode),
 		kind:    d.kind,
 		to:      toNode.Node,
 		from:    fromNode.Node,
 		context: optionalContext,
 	}
-	d.edges[ed] = ed
-	d.SetEdge(ed)
+	d.edges[ed.gonum] = ed
+	d.SetEdge(ed.gonum)
 
-	return &edgeView{ed}
+	return ed //&edgeView{ed}
 }
 
 func scopeDirected(g Graph, kind EdgeKind, do func(*directed) error) error {
