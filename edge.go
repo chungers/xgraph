@@ -8,7 +8,7 @@ import (
 )
 
 type edge struct {
-	gonum.Edge
+	gonum   gonum.Edge
 	from    Node
 	to      Node
 	kind    EdgeKind
@@ -17,9 +17,25 @@ type edge struct {
 	labeler EdgeLabeler
 }
 
+func (e *edge) To() Node {
+	return e.to
+}
+
+func (e *edge) From() Node {
+	return e.from
+}
+
+func (e *edge) Context() []interface{} {
+	return e.context
+}
+
+func (e *edge) Kind() EdgeKind {
+	return e.kind
+}
+
 func (e *edge) label() string {
 	if e.labeler != nil {
-		return e.labeler(&edgeView{e})
+		return e.labeler(e)
 	}
 
 	labels := []string{}
@@ -27,9 +43,9 @@ func (e *edge) label() string {
 
 		switch v := e.context[i].(type) {
 		case func(Edge) string:
-			labels = append(labels, v(&edgeView{e}))
+			labels = append(labels, v(e))
 		case EdgeLabeler:
-			labels = append(labels, v(&edgeView{e}))
+			labels = append(labels, v(e))
 		}
 
 	}
@@ -42,28 +58,4 @@ func (e *edge) Attributes() []encoding.Attribute {
 		attr["label"] = l
 	}
 	return attr.Attributes()
-}
-
-// edgeView is used to work around the problem that gonum.Edge.From() and xgraph.Edge.From() can't
-// be disambiguated by the compiler (different return types).  Also, we want to restrict the
-// properties exposed by separating the api implementation from the low-level implementations
-// like dot.Attributer.
-type edgeView struct {
-	*edge
-}
-
-func (e *edgeView) To() Node {
-	return e.to
-}
-
-func (e *edgeView) From() Node {
-	return e.from
-}
-
-func (e *edgeView) Context() []interface{} {
-	return e.context
-}
-
-func (e *edgeView) Kind() EdgeKind {
-	return e.kind
 }

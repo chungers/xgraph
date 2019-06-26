@@ -2,69 +2,13 @@ package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
 	"fmt"
+	"strconv"
 
 	gonum "gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/encoding"
 	"gonum.org/v1/gonum/graph/encoding/dot"
 	"gonum.org/v1/gonum/graph/simple"
 )
-
-type dotSubgraph struct {
-	*directed
-	DotOptions
-	dot.Subgrapher
-}
-
-func (ds *dotSubgraph) DOTID() string {
-	dotid := fmt.Sprintf("%v", ds.kind)
-	if ds.DotOptions.Edges != nil {
-		if v, has := ds.DotOptions.Edges[ds.kind]; has {
-			dotid = v
-		}
-		return dotid
-	}
-	return dotid
-}
-
-func (dg *dotSubgraph) edgeColor() string {
-	c := "black"
-	if dg.DotOptions.EdgeColors != nil {
-		if v, has := dg.DotOptions.EdgeColors[dg.kind]; has {
-			c = string(v)
-		}
-	}
-	return c
-}
-
-func (dg *dotSubgraph) edgeLabel() string {
-	return dg.DOTID()
-}
-
-func (dg *dotSubgraph) DOTAttributers() (graph, node, edge encoding.Attributer) {
-	graph = attributes{}
-	node = attributes{}
-	edge = attributes{"color": dg.edgeColor(), "label": dg.edgeLabel()}
-	return
-}
-
-func (ds *dotSubgraph) Subgraph() gonum.Graph {
-	return ds.directed
-}
-
-type dotGraph struct {
-	DotOptions
-	gonum.Directed
-
-	xg *graph
-}
-
-func (dg *dotGraph) DOTID() string {
-	id := dg.Name
-	if id == "" {
-		return "G"
-	}
-	return id
-}
 
 type attributes map[string]string
 
@@ -76,27 +20,177 @@ func (a attributes) Attributes() []encoding.Attribute {
 	return out
 }
 
-func (dg *dotGraph) DOTAttributers() (graph, node, edge encoding.Attributer) {
+// For encoding to dotfile, dotNode is a view of the Node.
+// It implements dot related methods and labeling.
+// For decoding it also implements the Setter interfaces called when
+// decoding a dotfile.
+//
+// During decoding this implementation of Node interface is provided
+// because the typical usage of the xgraph API is for user to provide
+// their own types that implement the Node interface.
+// When parsing dotfile, this type is used as the default implementation.
+type dotNode struct {
+	//node       *node
+	key        NodeKey
+	id         int64
+	attributes map[string]string
+	labeler    NodeLabeler
+}
+
+func (n dotNode) DOTID() string {
+	return fmt.Sprintf("%v", n.id)
+}
+
+func (n *dotNode) SetDOTID(id string) {
+	n.key = NodeKey(id)
+}
+
+func (n dotNode) ID() int64 {
+	return int64(n.id)
+}
+
+func (n dotNode) NodeKey() NodeKey {
+	return n.key
+}
+
+func (n dotNode) SetAttribute(attr encoding.Attribute) error {
+	if n.attributes == nil {
+		n.attributes = map[string]string{}
+	}
+	n.attributes[attr.Key] = attr.Value
+	return nil
+}
+
+func (n dotNode) label() string {
+	if n.labeler != nil {
+		return n.labeler(nil)
+	}
+	return fmt.Sprintf("%v", n.NodeKey())
+}
+
+func (n dotNode) Attributes() []encoding.Attribute {
+	attr := attributes{}
+
+	if l := n.label(); l != "" {
+		attr["label"] = l
+	}
+
+	return attr.Attributes()
+}
+
+type dotNodes struct {
+	gonum.Nodes
+	dg *dotGraph
+}
+
+func (dn *dotNodes) Node() gonum.Node {
+	gn := dn.Nodes.Node()
+	return dn.dg.dotNode(gn)
+}
+
+func (dg *dotGraph) Nodes() gonum.Nodes {
+	return &dotNodes{
+		Nodes: dg.Directed.Nodes(),
+		dg:    dg,
+	}
+}
+
+type dotGraph struct {
+	DotOptions
+	gonum.Directed
+
+	kind EdgeKind // set only when it's a subgraph
+	xg   *graph
+}
+
+func (dg *dotGraph) dotNode(gn gonum.Node) gonum.Node {
+	if gn == nil {
+		return nil
+	}
+
+	v := dg.xg.xgraph(gn)
+	if len(v) == 0 {
+		return nil
+	}
+
+	labeler, has := dg.DotOptions.NodeLabelers[v[0]]
+	if has {
+		old := labeler
+		userV := v[0] // this is actually the pointer to user provided node
+		labeler = func(Node) string {
+			return old(userV)
+		}
+	}
+	return &dotNode{
+		key:     v[0].NodeKey(),
+		id:      gn.ID(),
+		labeler: labeler,
+	}
+}
+
+func (dg *dotGraph) Node(id int64) gonum.Node {
+	gn := dg.Directed.Node(id)
+	return dg.dotNode(gn)
+}
+
+func (dg *dotGraph) DOTID() string {
+	if dg.kind == nil {
+		id := dg.Name
+		if id == "" {
+			return "G"
+		}
+		return id
+	}
+
+	dotid := fmt.Sprintf("%v", dg.kind)
+	if dg.DotOptions.Edges != nil {
+		if v, has := dg.DotOptions.Edges[dg.kind]; has {
+			dotid = v
+		}
+		return dotid
+	}
+	return dotid
+}
+
+func (dg dotGraph) edgeLabel() string {
+	return dg.DOTID()
+}
+
+func (dg dotGraph) edgeColor() string {
+	c := "black"
+	if dg.DotOptions.EdgeColors != nil {
+		if v, has := dg.DotOptions.EdgeColors[dg.kind]; has {
+			c = string(v)
+		}
+	}
+	return c
+}
+
+func (dg dotGraph) DOTAttributers() (graph, node, edge encoding.Attributer) {
 	graph = attributes{}
 	node = attributes{"shape": string(dg.DotOptions.NodeShape)}
-	edge = attributes{}
+	edge = attributes{"color": dg.edgeColor(), "label": dg.edgeLabel()}
 	return
 }
 
 func (dg *dotGraph) Structure() []dot.Graph {
-	subs := []dot.Graph{}
+	if dg.kind != nil {
+		return nil
+	}
 
+	subs := []dot.Graph{}
 	for k := range dg.xg.directed {
-		sg := &dotSubgraph{
-			directed:   dg.xg.directed[k],
+		subs = append(subs, &dotGraph{
+			kind:       k,
 			DotOptions: dg.DotOptions,
-		}
-		subs = append(subs, sg)
+			Directed:   dg.xg.directed[k],
+			xg:         dg.xg,
+		})
 	}
 	return subs
 }
 
-func RenderDot(g Graph, options DotOptions) ([]byte, error) {
+func EncodeDot(g Graph, options DotOptions) ([]byte, error) {
 
 	xg, is := g.(*graph)
 	if !is {
@@ -106,7 +200,7 @@ func RenderDot(g Graph, options DotOptions) ([]byte, error) {
 	// Set any EdgeLabelers to customize labels for Edges
 	count := 0
 	for edg, labeler := range options.EdgeLabelers {
-		if ev, is := edg.(*edgeView); is {
+		if ev, is := edg.(*edge /*View*/); is {
 			ev.labeler = labeler
 			count++
 		}
@@ -115,41 +209,120 @@ func RenderDot(g Graph, options DotOptions) ([]byte, error) {
 		defer func() {
 			// reset the labeler so we don't interfere with future renders
 			for edg := range options.EdgeLabelers {
-				if ev, is := edg.(*edgeView); is {
+				if ev, is := edg.(*edge /*View*/); is {
 					ev.labeler = nil
 				}
 			}
 		}()
 	}
 
-	// Set any NodeLabelers to customize labels for Nodes
-	count = 0
-
-	// Check if a global labeler is set
-	if labeler, has := options.NodeLabelers[nil]; has {
-		count = xg.setLabelers(labeler)
-	}
-	for n, labeler := range options.NodeLabelers {
-		if n != nil {
-			if v := g.Node(n.NodeKey()); v != nil {
-				if xn, is := v.(*node); is {
-					xn.labeler = labeler
-					count++
-				}
-			}
-		}
-	}
-	if count > 0 {
-		defer func() {
-			xg.setLabelers(nil)
-		}()
-	}
-
 	dg := &dotGraph{
 		DotOptions: options,
-		Directed:   simple.NewDirectedGraph(), //xg.DirectedBuilder,
+		Directed:   simple.NewDirectedGraph(),
 		xg:         xg,
 	}
 
 	return dot.Marshal(dg, options.Name, options.Prefix, options.Indent)
+}
+
+func DecodeDot(buff []byte, g Graph, kind EdgeKind) error {
+	// Check the implementation. Currently only support our own.
+	xg, is := g.(*graph)
+	if !is {
+		return fmt.Errorf("wrong implementation")
+	}
+
+	directed := xg.directedGraph(kind)
+	return dot.Unmarshal(buff, &dotBuilder{Graph: directed, xg: xg, kind: kind})
+}
+
+type dotBuilder struct {
+	gonum.Graph
+	kind EdgeKind
+	xg   *graph
+}
+
+func (b *dotBuilder) NewNode() gonum.Node {
+	return &dotNode{id: b.xg.nextID.get()}
+}
+
+func (b *dotBuilder) AddNode(n gonum.Node) {
+	add, is := n.(*dotNode)
+	if !is {
+		return
+	}
+	b.xg.Add(add)
+	return
+}
+
+type dotEdge struct {
+	edge       *edge
+	from       gonum.Node
+	to         gonum.Node
+	attributes map[string]string
+}
+
+func (e dotEdge) From() gonum.Node {
+	return e.from
+}
+
+func (e dotEdge) To() gonum.Node {
+	return e.to
+}
+
+func (e dotEdge) ReversedEdge() gonum.Edge {
+	return &dotEdge{to: e.from, from: e.to}
+}
+
+func (e *dotEdge) SetAttribute(attr encoding.Attribute) error {
+	if e.attributes == nil {
+		e.attributes = map[string]string{}
+	}
+	e.attributes[attr.Key] = attr.Value
+	if attr.Key == "context" {
+		// TODO - hacky
+		if intV, err := strconv.Atoi(attr.Value); err == nil {
+			e.edge.context = []interface{}{intV}
+		}
+	}
+	return nil
+}
+
+func (b *dotBuilder) NewEdge(from, to gonum.Node) gonum.Edge {
+	return &dotEdge{from: from, to: to}
+}
+
+func (b *dotBuilder) SetEdge(e gonum.Edge) {
+	ee, is := e.(*dotEdge)
+	if !is {
+		return
+	}
+	from, is := e.From().(*dotNode)
+	if !is {
+		return
+	}
+	to, is := e.To().(*dotNode)
+	if !is {
+		return
+	}
+	add, err := b.xg.Associate(from, b.kind, to)
+	if err == nil {
+		xedge, is := add.(*edge)
+		if is {
+			ee.edge = xedge
+		}
+	}
+	return
+}
+
+func (b *dotBuilder) DOTAttributeSetters() (G, N, E encoding.AttributeSetter) {
+	fmt.Println("DOTAttributeSetters")
+	return attr("G"), attr("N"), attr("E")
+}
+
+type attr string
+
+func (a attr) SetAttribute(attr encoding.Attribute) error {
+	fmt.Println(a, "SetAttribute", attr.Key, attr.Value)
+	return nil
 }
