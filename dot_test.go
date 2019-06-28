@@ -145,12 +145,72 @@ func TestEncoderDotVpc(t *testing.T) {
 		NodeLabelers: map[Node]NodeLabeler{},
 	}
 
-	buff, err := RenderDot(g, dotOptions)
+	buff, err := EncodeDot(g, dotOptions)
 	require.NoError(t, err)
 	//fmt.Println(string(buff))
 	t.Log(string(buff))
 }
 
+func TestDecodeDot(t *testing.T) {
+
+	dot := `
+strict digraph V {
+  edge [
+    color=blue
+    kind = input
+  ];
+
+  // Node definitions.
+  x1
+  x2
+  x3
+  y1
+  y2
+  sumX [op=sum, label=sum];
+  sumY [
+        op=sum, label=sum,
+        shape=doublecircle,
+        service=remote_inference
+       ];
+  ratio [op=ratio];
+
+  // Edge definitions.
+  sumX -> ratio;
+  sumY -> ratio;
+  x1 -> sumX;
+  x2 -> sumX;
+  x3 -> sumX;
+  x3 -> sumY [context=0];
+  y1 -> sumY [context=1];
+  y2 -> sumY [context=2];
+}
+`
+	t.Log(dot)
+
+	g := Builder(Options{})
+
+	kind := EdgeKind(0)
+	err := DecodeDot([]byte(dot), g, kind)
+	require.NoError(t, err)
+
+	// Now Encode
+	dotOptions := DotOptions{
+		Name:      "V",
+		Indent:    "  ",
+		NodeShape: NodeShapeBox,
+		Edges: map[EdgeKind]string{
+			kind: "input",
+		},
+		EdgeColors: map[EdgeKind]EdgeColor{
+			kind: EdgeColorRed,
+		},
+		EdgeLabelers: map[Edge]EdgeLabeler{},
+		NodeLabelers: map[Node]NodeLabeler{},
+	}
+	view, err := EncodeDot(g, dotOptions)
+	require.NoError(t, err)
+	t.Log(string(view))
+}
 func TestEncodeDot(t *testing.T) {
 
 	likes := EdgeKind(1)
@@ -209,12 +269,12 @@ func TestEncodeDot(t *testing.T) {
 		return fmt.Sprintf("%v %v %v", e.From(), dotOptions.Edges[e.Kind()], e.To())
 	}
 
-	buff, err := RenderDot(g, dotOptions)
+	buff, err := EncodeDot(g, dotOptions)
 	require.NoError(t, err)
 	//fmt.Println(string(buff))
 	t.Log(string(buff))
 
 	dotOptions.EdgeLabelers = nil
-	_, err = RenderDot(g, dotOptions)
+	_, err = EncodeDot(g, dotOptions)
 	require.NoError(t, err)
 }

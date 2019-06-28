@@ -8,39 +8,49 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEdgeLabel(t *testing.T) {
+func TestDotEdgeLabel(t *testing.T) {
 
-	var ed *edge
-	ed = &edge{
-		context: []interface{}{},
+	var ed *dotEdge
+
+	ed = &dotEdge{
+		edge: &edge{
+			context: []interface{}{},
+		},
+	}
+
+	require.Equal(t, "", ed.label())
+
+	ed = &dotEdge{
+		edge: &edge{
+			context: []interface{}{
+				"foo", "bar",
+			},
+		},
 	}
 	require.Equal(t, "", ed.label())
 
-	ed = &edge{
-		context: []interface{}{
-			"foo", "bar",
-		},
-	}
-	require.Equal(t, "foo,bar", ed.label())
-
 	label := "my label"
-	ed = &edge{
-		context: []interface{}{
-			func(edge Edge) string {
-				return label
+	ed = &dotEdge{
+		edge: &edge{
+			context: []interface{}{
+				func(edge Edge) string {
+					return label
+				},
 			},
 		},
 	}
 	require.Equal(t, label, ed.label())
 
 	label2 := "my label2"
-	ed = &edge{
-		context: []interface{}{
-			func(edge Edge) string {
-				return label
-			},
-			func(edge Edge) string {
-				return label2
+	ed = &dotEdge{
+		edge: &edge{
+			context: []interface{}{
+				func(edge Edge) string {
+					return label
+				},
+				func(edge Edge) string {
+					return label2
+				},
 			},
 		},
 	}
