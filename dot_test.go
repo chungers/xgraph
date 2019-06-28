@@ -2,6 +2,7 @@ package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,7 +24,8 @@ func testDataVpc(t *testing.T) Graph {
 	az := []string{"az1", "az2"}
 
 	// Technique here uses embedded types to mark the different nodes types
-	// this will make it easy to look for to/from nodes of certain types after the edge is known.
+	// this will make it easy to look for to/from nodes of certain types
+	// after the edge is known.
 	type subnet_t struct {
 		*nodeT
 	}
@@ -120,6 +122,55 @@ func testDataVpc(t *testing.T) Graph {
 	}
 
 	return g
+}
+
+func TestDotEdgeLabel(t *testing.T) {
+
+	var ed *dotEdge
+
+	ed = &dotEdge{
+		edge: &edge{
+			context: []interface{}{},
+		},
+	}
+
+	require.Equal(t, "", ed.label())
+
+	ed = &dotEdge{
+		edge: &edge{
+			context: []interface{}{
+				"foo", "bar",
+			},
+		},
+	}
+	require.Equal(t, "", ed.label())
+
+	label := "my label"
+	ed = &dotEdge{
+		edge: &edge{
+			context: []interface{}{
+				func(edge Edge) string {
+					return label
+				},
+			},
+		},
+	}
+	require.Equal(t, label, ed.label())
+
+	label2 := "my label2"
+	ed = &dotEdge{
+		edge: &edge{
+			context: []interface{}{
+				func(edge Edge) string {
+					return label
+				},
+				func(edge Edge) string {
+					return label2
+				},
+			},
+		},
+	}
+	require.Equal(t, strings.Join([]string{label, label2}, ","), ed.label())
 }
 
 func TestEncoderDotVpc(t *testing.T) {
