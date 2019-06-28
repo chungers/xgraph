@@ -31,7 +31,6 @@ func (a attributes) Attributes() []encoding.Attribute {
 // their own types that implement the Node interface.
 // When parsing dotfile, this type is used as the default implementation.
 type dotNode struct {
-	//node       *node
 	key        NodeKey
 	id         int64
 	attributes map[string]string
@@ -54,7 +53,7 @@ func (n dotNode) NodeKey() NodeKey {
 	return n.key
 }
 
-func (n dotNode) SetAttribute(attr encoding.Attribute) error {
+func (n *dotNode) SetAttribute(attr encoding.Attribute) error {
 	if n.attributes == nil {
 		n.attributes = map[string]string{}
 	}
@@ -71,11 +70,12 @@ func (n dotNode) label() string {
 
 func (n dotNode) Attributes() []encoding.Attribute {
 	attr := attributes{}
-
+	for k, v := range n.attributes {
+		attr[k] = v
+	}
 	if l := n.label(); l != "" {
 		attr["label"] = l
 	}
-
 	return attr.Attributes()
 }
 
@@ -133,6 +133,12 @@ func (dg *dotGraph) dotNode(gn gonum.Node) gonum.Node {
 			return old(userV)
 		}
 	}
+	// Special case when we use dotfile as input where we provided our own
+	// Node implementation struct (dotNode): don't wrap it again.
+	if dn, is := v[0].(*dotNode); is {
+		dn.labeler = labeler
+		return dn
+	}
 	return &dotNode{
 		key:     v[0].NodeKey(),
 		id:      gn.ID(),
@@ -141,6 +147,9 @@ func (dg *dotGraph) dotNode(gn gonum.Node) gonum.Node {
 }
 
 func (dg *dotGraph) dotEdge(e gonum.Edge) gonum.Edge {
+	if de, is := e.(*dotEdge); is {
+		return de
+	}
 	xedge, has := dg.xg.directed[dg.kind].edges[e]
 	if !has {
 		return e
@@ -205,12 +214,13 @@ func (dg *dotGraph) Structure() []dot.Graph {
 
 	subs := []dot.Graph{}
 	for k := range dg.xg.directed {
-		subs = append(subs, &dotGraph{
-			kind:       k,
-			DotOptions: dg.DotOptions,
-			Directed:   dg.xg.directed[k],
-			xg:         dg.xg,
-		})
+		subs = append(subs,
+			&dotGraph{
+				kind:       k,
+				DotOptions: dg.DotOptions,
+				Directed:   dg.xg.directed[k],
+				xg:         dg.xg,
+			})
 	}
 	return subs
 }
@@ -237,17 +247,24 @@ func DecodeDot(buff []byte, g Graph, kind EdgeKind) error {
 	}
 
 	directed := xg.directedGraph(kind)
-	return dot.Unmarshal(buff, &dotBuilder{Graph: directed, xg: xg, kind: kind})
+	return dot.Unmarshal(buff,
+		&dotBuilder{
+			Graph:  directed,
+			xg:     xg,
+			kind:   kind,
+			nextID: &nodeID{},
+		})
 }
 
 type dotBuilder struct {
 	gonum.Graph
-	kind EdgeKind
-	xg   *graph
+	kind   EdgeKind
+	xg     *graph
+	nextID *nodeID
 }
 
 func (b *dotBuilder) NewNode() gonum.Node {
-	return &dotNode{id: b.xg.nextID.get()}
+	return &dotNode{id: b.nextID.get()}
 }
 
 func (b *dotBuilder) AddNode(n gonum.Node) {
@@ -260,11 +277,10 @@ func (b *dotBuilder) AddNode(n gonum.Node) {
 }
 
 type dotEdge struct {
-	edge       *edge
-	from       gonum.Node
-	to         gonum.Node
-	attributes map[string]string
-	labeler    EdgeLabeler
+	edge    *edge
+	from    gonum.Node
+	to      gonum.Node
+	labeler EdgeLabeler
 }
 
 func (e dotEdge) From() gonum.Node {
@@ -280,10 +296,13 @@ func (e dotEdge) ReversedEdge() gonum.Edge {
 }
 
 func (e *dotEdge) SetAttribute(attr encoding.Attribute) error {
-	if e.attributes == nil {
-		e.attributes = map[string]string{}
+	if e.edge == nil {
+		panic("cna't set")
 	}
-	e.attributes[attr.Key] = attr.Value
+	if e.edge.attributes == nil {
+		e.edge.attributes = map[string]interface{}{}
+	}
+	e.edge.attributes[attr.Key] = attr.Value
 	if attr.Key == "context" {
 		// TODO - hacky
 		if intV, err := strconv.Atoi(attr.Value); err == nil {
@@ -312,10 +331,17 @@ func (e dotEdge) label() string {
 }
 
 func (e dotEdge) Attributes() []encoding.Attribute {
+	if e.edge == nil {
+		return nil
+	}
 	attr := attributes{}
+	for k, v := range e.edge.attributes {
+		attr[k] = fmt.Sprintf("%v", v)
+	}
 	if l := e.label(); l != "" {
 		attr["label"] = l
 	}
+	// TODO - make context just attributes
 	if e.edge != nil {
 		sl := []string{}
 		for _, c := range e.edge.Context() {
@@ -356,13 +382,11 @@ func (b *dotBuilder) SetEdge(e gonum.Edge) {
 }
 
 func (b *dotBuilder) DOTAttributeSetters() (G, N, E encoding.AttributeSetter) {
-	fmt.Println("DOTAttributeSetters")
 	return attr("G"), attr("N"), attr("E")
 }
 
 type attr string
 
 func (a attr) SetAttribute(attr encoding.Attribute) error {
-	fmt.Println(a, "SetAttribute", attr.Key, attr.Value)
 	return nil
 }

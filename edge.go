@@ -7,11 +7,12 @@ import (
 )
 
 type edge struct {
-	gonum   gonum.Edge
-	from    Node
-	to      Node
-	kind    EdgeKind
-	context []interface{}
+	gonum      gonum.Edge
+	from       Node
+	to         Node
+	kind       EdgeKind
+	context    []interface{}
+	attributes map[string]interface{}
 }
 
 func (e *edge) To() Node {
