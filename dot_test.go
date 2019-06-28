@@ -173,7 +173,7 @@ func TestDotEdgeLabel(t *testing.T) {
 	require.Equal(t, strings.Join([]string{label, label2}, ","), ed.label())
 }
 
-func TestEncoderDotVpc(t *testing.T) {
+func TestEncodeDotVpc(t *testing.T) {
 
 	contains := EdgeKind(1)
 	depends := EdgeKind(2)
