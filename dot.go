@@ -3,6 +3,7 @@ package xgraph // import "github.com/orkestr8/xgraph"
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	gonum "gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/encoding"
@@ -38,7 +39,7 @@ type dotNode struct {
 }
 
 func (n dotNode) DOTID() string {
-	return fmt.Sprintf("%v", n.id)
+	return fmt.Sprintf("%v", n.key)
 }
 
 func (n *dotNode) SetDOTID(id string) {
@@ -95,6 +96,17 @@ func (dg *dotGraph) Nodes() gonum.Nodes {
 	}
 }
 
+func (dg *dotGraph) From(id int64) gonum.Nodes {
+	return &dotNodes{
+		Nodes: dg.Directed.From(id),
+		dg:    dg,
+	}
+}
+
+func (dg *dotGraph) Edge(uid, vid int64) gonum.Edge {
+	return dg.dotEdge(dg.Directed.Edge(uid, vid))
+}
+
 type dotGraph struct {
 	DotOptions
 	gonum.Directed
@@ -125,6 +137,19 @@ func (dg *dotGraph) dotNode(gn gonum.Node) gonum.Node {
 		key:     v[0].NodeKey(),
 		id:      gn.ID(),
 		labeler: labeler,
+	}
+}
+
+func (dg *dotGraph) dotEdge(e gonum.Edge) gonum.Edge {
+	xedge, has := dg.xg.directed[dg.kind].edges[e]
+	if !has {
+		return e
+	}
+
+	return &dotEdge{
+		edge: xedge,
+		from: e.From(),
+		to:   e.To(),
 	}
 }
 
@@ -191,31 +216,10 @@ func (dg *dotGraph) Structure() []dot.Graph {
 }
 
 func EncodeDot(g Graph, options DotOptions) ([]byte, error) {
-
 	xg, is := g.(*graph)
 	if !is {
 		return nil, ErrNotSupported{g}
 	}
-
-	// Set any EdgeLabelers to customize labels for Edges
-	count := 0
-	for edg, labeler := range options.EdgeLabelers {
-		if ev, is := edg.(*edge /*View*/); is {
-			ev.labeler = labeler
-			count++
-		}
-	}
-	if count > 0 {
-		defer func() {
-			// reset the labeler so we don't interfere with future renders
-			for edg := range options.EdgeLabelers {
-				if ev, is := edg.(*edge /*View*/); is {
-					ev.labeler = nil
-				}
-			}
-		}()
-	}
-
 	dg := &dotGraph{
 		DotOptions: options,
 		Directed:   simple.NewDirectedGraph(),
@@ -260,6 +264,7 @@ type dotEdge struct {
 	from       gonum.Node
 	to         gonum.Node
 	attributes map[string]string
+	labeler    EdgeLabeler
 }
 
 func (e dotEdge) From() gonum.Node {
@@ -286,6 +291,41 @@ func (e *dotEdge) SetAttribute(attr encoding.Attribute) error {
 		}
 	}
 	return nil
+}
+
+func (e dotEdge) label() string {
+	if e.labeler != nil {
+		return e.labeler(e.edge)
+	}
+
+	labels := []string{}
+	for i := range e.edge.context {
+		switch v := e.edge.context[i].(type) {
+		case func(Edge) string:
+			labels = append(labels, v(e.edge))
+		case EdgeLabeler:
+			labels = append(labels, v(e.edge))
+		}
+
+	}
+	return strings.Join(labels, ",")
+}
+
+func (e dotEdge) Attributes() []encoding.Attribute {
+	attr := attributes{}
+	if l := e.label(); l != "" {
+		attr["label"] = l
+	}
+	if e.edge != nil {
+		sl := []string{}
+		for _, c := range e.edge.Context() {
+			sl = append(sl, fmt.Sprintf("%v", c))
+		}
+		if len(sl) > 0 {
+			attr["context"] = strings.Join(sl, ",")
+		}
+	}
+	return attr.Attributes()
 }
 
 func (b *dotBuilder) NewEdge(from, to gonum.Node) gonum.Edge {
