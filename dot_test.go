@@ -122,7 +122,7 @@ func testDataVpc(t *testing.T) Graph {
 	return g
 }
 
-func TestEncoderDotVpc(t *testing.T) {
+func TestEncodeDotVpc(t *testing.T) {
 
 	contains := EdgeKind(1)
 	depends := EdgeKind(2)
@@ -180,7 +180,7 @@ strict digraph V {
   x1 -> sumX;
   x2 -> sumX;
   x3 -> sumX;
-  x3 -> sumY [context=0];
+  x3 -> sumY [context=0, signal=found];
   y1 -> sumY [context=1];
   y2 -> sumY [context=2];
 }
