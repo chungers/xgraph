@@ -97,17 +97,22 @@ func TestAssociate(t *testing.T) {
 	likes := EdgeKind(1)
 	shares := EdgeKind(2)
 
-	ev, err := g.Associate(A, likes, B, "some context", "something else")
+	ev, err := g.Associate(A, likes, B, Attribute{Key: "key1", Value: "some context"},
+		Attribute{Key: "key2", Value: "something else"})
 	require.NoError(t, err)
 	require.NotNil(t, g.Edge(A, likes, B))
 	require.NotNil(t, ev)
 	require.Equal(t, A, ev.From())
 	require.Equal(t, B, ev.To())
-	require.Equal(t, []interface{}{"some context", "something else"}, ev.Context())
+	require.Equal(t, map[string]interface{}{
+		"key1": "some context",
+		"key2": "something else"}, ev.Attributes())
 
 	require.Equal(t, A, g.Edge(A, likes, B).From())
 	require.Equal(t, B, g.Edge(A, likes, B).To())
-	require.Equal(t, []interface{}{"some context", "something else"}, g.Edge(A, likes, B).Context())
+	require.Equal(t, map[string]interface{}{
+		"key1": "some context",
+		"key2": "something else"}, g.Edge(A, likes, B).Attributes())
 
 	_, err = g.Associate(D, likes, A)
 	require.Error(t, err, "Expects error because D was not added to the graph.")
@@ -116,7 +121,7 @@ func TestAssociate(t *testing.T) {
 	_, err = g.Associate(A, likes, C)
 	require.NoError(t, err, "No error because A and C are members of the graph.")
 	require.NotNil(t, g.Edge(A, likes, C), "A likes C.")
-	require.Equal(t, 0, len(g.Edge(A, likes, C).Context()))
+	require.Equal(t, 0, len(g.Edge(A, likes, C).Attributes()))
 	require.Nil(t, g.Edge(C, shares, A), "Shares is not an association kind between A and B.")
 
 	// Repeated calls to get the edge always result in the same reference:

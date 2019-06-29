@@ -244,9 +244,12 @@ func TestEncodeDot(t *testing.T) {
 	g.Associate(A, likes, C)
 	g.Associate(A, likes, D)
 
-	g.Associate(B, shares, A, "ba", "xx")
-	g.Associate(B, shares, C, "bc")
-	g.Associate(B, shares, D, "bd")
+	g.Associate(B, shares, A,
+		Attribute{Key: "key1", Value: "ba"}, Attribute{Key: "key2", Value: "xx"})
+	g.Associate(B, shares, C,
+		Attribute{Key: "key1", Value: "bc"})
+	g.Associate(B, shares, D,
+		Attribute{Key: "key1", Value: "bd"})
 
 	g.Associate(C, shares, B)
 	g.Associate(C, shares, D)
