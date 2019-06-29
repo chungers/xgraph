@@ -26,7 +26,7 @@ type directed struct {
 	lock sync.RWMutex
 }
 
-func (d *directed) associate(fromNode, toNode *node, optionalContext ...interface{}) *edge {
+func (d *directed) associate(fromNode, toNode *node, attrs ...Attribute) *edge {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -38,11 +38,11 @@ func (d *directed) associate(fromNode, toNode *node, optionalContext ...interfac
 	}
 
 	ed := &edge{
-		gonum:   d.NewEdge(fromNode, toNode),
-		kind:    d.kind,
-		to:      toNode.Node,
-		from:    fromNode.Node,
-		context: optionalContext,
+		gonum:      d.NewEdge(fromNode, toNode),
+		kind:       d.kind,
+		to:         toNode.Node,
+		from:       fromNode.Node,
+		attributes: attrs,
 	}
 	d.edges[ed.gonum] = ed
 	d.SetEdge(ed.gonum)

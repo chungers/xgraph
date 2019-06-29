@@ -12,28 +12,38 @@ func TestDotEdgeLabel(t *testing.T) {
 	var ed *dotEdge
 
 	ed = &dotEdge{
-		edge: &edge{
-			context: []interface{}{},
-		},
+		edge: &edge{},
 	}
 
 	require.Equal(t, "", ed.label())
 
 	ed = &dotEdge{
 		edge: &edge{
-			context: []interface{}{
-				"foo", "bar",
+			attributes: []Attribute{
+				{Key: "foo", Value: "bar"},
 			},
 		},
 	}
 	require.Equal(t, "", ed.label())
 
+	ed = &dotEdge{
+		edge: &edge{
+			attributes: []Attribute{
+				{Key: "label", Value: "bar"},
+			},
+		},
+	}
+	require.Equal(t, "bar", ed.label())
+
 	label := "my label"
 	ed = &dotEdge{
 		edge: &edge{
-			context: []interface{}{
-				func(edge Edge) string {
-					return label
+			attributes: []Attribute{
+				{
+					Key: "whatever",
+					Value: func(edge Edge) string {
+						return label
+					},
 				},
 			},
 		},
@@ -43,12 +53,18 @@ func TestDotEdgeLabel(t *testing.T) {
 	label2 := "my label2"
 	ed = &dotEdge{
 		edge: &edge{
-			context: []interface{}{
-				func(edge Edge) string {
-					return label
+			attributes: []Attribute{
+				{
+					Key: "foo",
+					Value: func(edge Edge) string {
+						return label
+					},
 				},
-				func(edge Edge) string {
-					return label2
+				{
+					Key: "bar",
+					Value: func(edge Edge) string {
+						return label2
+					},
 				},
 			},
 		},

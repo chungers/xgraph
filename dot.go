@@ -2,7 +2,6 @@ package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	gonum "gonum.org/v1/gonum/graph"
@@ -34,6 +33,7 @@ type dotNode struct {
 	key        NodeKey
 	id         int64
 	attributes map[string]string
+	attributer Attributer
 	labeler    NodeLabeler
 }
 
@@ -70,6 +70,19 @@ func (n dotNode) label() string {
 
 func (n dotNode) Attributes() []encoding.Attribute {
 	attr := attributes{}
+
+	// Merge all attributes
+	// Note that Attributer interface is for the case when
+	// user provides Node implementation and satisfies the
+	// Attributer interface contract.  The dotNode.attributes
+	// field is used when dotNode itself is used as the user
+	// provided Node implementation (from parsing the dotfile)
+	if n.attributer != nil {
+		for k, v := range n.attributer.Attributes() {
+			attr[k] = fmt.Sprintf("%v", v)
+		}
+	}
+
 	for k, v := range n.attributes {
 		attr[k] = v
 	}
@@ -300,15 +313,10 @@ func (e *dotEdge) SetAttribute(attr encoding.Attribute) error {
 		panic("cna't set")
 	}
 	if e.edge.attributes == nil {
-		e.edge.attributes = map[string]interface{}{}
+		e.edge.attributes = []Attribute{}
 	}
-	e.edge.attributes[attr.Key] = attr.Value
-	if attr.Key == "context" {
-		// TODO - hacky
-		if intV, err := strconv.Atoi(attr.Value); err == nil {
-			e.edge.context = []interface{}{intV}
-		}
-	}
+	e.edge.attributes = append(e.edge.attributes,
+		Attribute{Key: attr.Key, Value: attr.Value})
 	return nil
 }
 
@@ -317,9 +325,18 @@ func (e dotEdge) label() string {
 		return e.labeler(e.edge)
 	}
 
+	if e.edge.attributes == nil {
+		return ""
+	}
+	for _, a := range e.edge.attributes {
+		if a.Key == "label" {
+			return fmt.Sprintf("%v", a.Value)
+		}
+	}
+
 	labels := []string{}
-	for i := range e.edge.context {
-		switch v := e.edge.context[i].(type) {
+	for _, a := range e.edge.attributes {
+		switch v := a.Value.(type) {
 		case func(Edge) string:
 			labels = append(labels, v(e.edge))
 		case EdgeLabeler:
@@ -335,21 +352,13 @@ func (e dotEdge) Attributes() []encoding.Attribute {
 		return nil
 	}
 	attr := attributes{}
-	for k, v := range e.edge.attributes {
+
+	for k, v := range e.edge.Attributes() {
 		attr[k] = fmt.Sprintf("%v", v)
 	}
+
 	if l := e.label(); l != "" {
 		attr["label"] = l
-	}
-	// TODO - make context just attributes
-	if e.edge != nil {
-		sl := []string{}
-		for _, c := range e.edge.Context() {
-			sl = append(sl, fmt.Sprintf("%v", c))
-		}
-		if len(sl) > 0 {
-			attr["context"] = strings.Join(sl, ",")
-		}
 	}
 	return attr.Attributes()
 }
