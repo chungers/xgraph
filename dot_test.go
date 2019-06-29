@@ -2,7 +2,6 @@ package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -122,55 +121,6 @@ func testDataVpc(t *testing.T) Graph {
 	}
 
 	return g
-}
-
-func TestDotEdgeLabel(t *testing.T) {
-
-	var ed *dotEdge
-
-	ed = &dotEdge{
-		edge: &edge{
-			context: []interface{}{},
-		},
-	}
-
-	require.Equal(t, "", ed.label())
-
-	ed = &dotEdge{
-		edge: &edge{
-			context: []interface{}{
-				"foo", "bar",
-			},
-		},
-	}
-	require.Equal(t, "", ed.label())
-
-	label := "my label"
-	ed = &dotEdge{
-		edge: &edge{
-			context: []interface{}{
-				func(edge Edge) string {
-					return label
-				},
-			},
-		},
-	}
-	require.Equal(t, label, ed.label())
-
-	label2 := "my label2"
-	ed = &dotEdge{
-		edge: &edge{
-			context: []interface{}{
-				func(edge Edge) string {
-					return label
-				},
-				func(edge Edge) string {
-					return label2
-				},
-			},
-		},
-	}
-	require.Equal(t, strings.Join([]string{label, label2}, ","), ed.label())
 }
 
 func TestEncodeDotVpc(t *testing.T) {
@@ -295,9 +245,12 @@ func TestEncodeDot(t *testing.T) {
 	g.Associate(A, likes, C)
 	g.Associate(A, likes, D)
 
-	g.Associate(B, shares, A, "ba", "xx")
-	g.Associate(B, shares, C, "bc")
-	g.Associate(B, shares, D, "bd")
+	g.Associate(B, shares, A,
+		Attribute{Key: "key1", Value: "ba"}, Attribute{Key: "key2", Value: "xx"})
+	g.Associate(B, shares, C,
+		Attribute{Key: "key1", Value: "bc"})
+	g.Associate(B, shares, D,
+		Attribute{Key: "key1", Value: "bd"})
 
 	g.Associate(C, shares, B)
 	g.Associate(C, shares, D)
@@ -328,4 +281,66 @@ func TestEncodeDot(t *testing.T) {
 	dotOptions.EdgeLabelers = nil
 	_, err = EncodeDot(g, dotOptions)
 	require.NoError(t, err)
+}
+
+func TestDotEdgeLabels(t *testing.T) {
+
+	ed := &dotEdge{
+		edge: &edge{},
+	}
+	require.Equal(t, "", ed.label())
+
+	ed = &dotEdge{
+		edge: &edge{
+			attributes: []Attribute{
+				{Key: "foo", Value: "bar"},
+			},
+		},
+	}
+	require.Equal(t, "", ed.label())
+
+	ed = &dotEdge{
+		edge: &edge{
+			attributes: []Attribute{
+				{Key: "label", Value: "bar"},
+			},
+		},
+	}
+	require.Equal(t, "bar", ed.label())
+
+	label := "my label"
+	ed = &dotEdge{
+		edge: &edge{
+			attributes: []Attribute{
+				{
+					Key: "whatever",
+					Value: func(edge Edge) string {
+						return label
+					},
+				},
+			},
+		},
+	}
+	require.Equal(t, label, ed.label())
+
+	label2 := "my label2"
+	ed = &dotEdge{
+		edge: &edge{
+			attributes: []Attribute{
+				{
+					Key: "foo",
+					Value: func(edge Edge) string {
+						return label
+					},
+				},
+				{
+					Key: "bar",
+					Value: func(edge Edge) string {
+						return label2
+					},
+				},
+			},
+		},
+	}
+	require.Equal(t, label+","+label2, ed.label())
 }

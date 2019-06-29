@@ -110,7 +110,7 @@ func (g *graph) directedGraph(kind EdgeKind) *directed {
 	return g.directed[kind]
 }
 
-func (g *graph) Associate(from Node, kind EdgeKind, to Node, optionalContext ...interface{}) (Edge, error) {
+func (g *graph) Associate(from Node, kind EdgeKind, to Node, attrs ...Attribute) (Edge, error) {
 	fromNode := g.nodeKeys[from.NodeKey()]
 	if fromNode == nil {
 		return nil, ErrNoSuchNode{Node: from, context: "From"}
@@ -120,7 +120,7 @@ func (g *graph) Associate(from Node, kind EdgeKind, to Node, optionalContext ...
 		return nil, ErrNoSuchNode{Node: to, context: "To"}
 	}
 
-	return g.directedGraph(kind).associate(fromNode, toNode, optionalContext...), nil
+	return g.directedGraph(kind).associate(fromNode, toNode, attrs...), nil
 }
 
 func (g *graph) Edge(from Node, kind EdgeKind, to Node) Edge {

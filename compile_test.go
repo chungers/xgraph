@@ -43,12 +43,12 @@ func TestFuncReflectPrototype(t *testing.T) {
 }
 
 func testOrderByContextIndex(a, b Edge) bool {
-	ca := a.Context()
-	cb := b.Context()
+	ca := a.Attributes()
+	cb := b.Attributes()
 	if len(ca) > 0 && len(cb) > 0 {
-		idx, ok := ca[0].(int)
+		idx, ok := ca["order"].(int)
 		if ok {
-			idx2, ok2 := cb[0].(int)
+			idx2, ok2 := cb["order"].(int)
 			if ok2 {
 				return idx < idx2
 			}
@@ -102,11 +102,11 @@ func testBuildGraph(input EdgeKind) Graph {
 	g.Associate(x1, input, sumX) // ordering comes from the nodeKey, lexicographically
 	g.Associate(x2, input, sumX)
 	g.Associate(x3, input, sumX)
-	g.Associate(y1, input, sumY, 2)
-	g.Associate(y2, input, sumY, 1)
-	g.Associate(x3, input, sumY, 0)
-	g.Associate(sumX, input, ratio, 0) // context is the positional arg index
-	g.Associate(sumY, input, ratio, 1)
+	g.Associate(y1, input, sumY, Attribute{Key: "order", Value: 2})
+	g.Associate(y2, input, sumY, Attribute{Key: "order", Value: 1})
+	g.Associate(x3, input, sumY, Attribute{Key: "order", Value: 0})
+	g.Associate(sumX, input, ratio, Attribute{Key: "order", Value: 0}) // positional arg index
+	g.Associate(sumY, input, ratio, Attribute{Key: "order", Value: 1})
 	return g
 }
 

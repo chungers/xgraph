@@ -4,8 +4,9 @@ type NodeKey interface{}
 type NodeKeyer interface {
 	NodeKey() NodeKey
 }
-type Node interface {
-	NodeKeyer
+
+type Attributer interface {
+	Attributes() map[string]interface{}
 }
 
 type OperatorFunc func([]interface{}) (interface{}, error)
@@ -14,8 +15,8 @@ type Operator interface {
 	OperatorFunc() OperatorFunc
 }
 
-type Contexter interface {
-	Context() []interface{}
+type Node interface {
+	NodeKeyer
 }
 
 type Path []Node
@@ -23,7 +24,7 @@ type Path []Node
 type EdgeKind interface{}
 
 type Edge interface {
-	Contexter
+	Attributer
 	Kind() EdgeKind
 	To() Node
 	From() Node
@@ -35,10 +36,15 @@ type Options struct {
 	NodeIDOffset int64
 }
 
+type Attribute struct {
+	Key   string
+	Value interface{}
+}
+
 type GraphBuilder interface {
 	Graph
 	Add(Node, ...Node) error
-	Associate(from Node, kind EdgeKind, to Node, optionalContext ...interface{}) (Edge, error)
+	Associate(from Node, kind EdgeKind, to Node, attributes ...Attribute) (Edge, error)
 }
 
 type Nodes <-chan Node

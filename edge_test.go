@@ -20,23 +20,23 @@ func TestSortEdges(t *testing.T) {
 	g := Builder(Options{})
 	g.Add(x1, x2, x3, x4, sum)
 
-	g.Associate(x1, input1, sum, 3)
-	g.Associate(x2, input1, sum, 2)
-	g.Associate(x3, input1, sum, 1)
-	g.Associate(x4, input1, sum, 0)
+	g.Associate(x1, input1, sum, Attribute{Key: "order", Value: 3})
+	g.Associate(x2, input1, sum, Attribute{Key: "order", Value: 2})
+	g.Associate(x3, input1, sum, Attribute{Key: "order", Value: 1})
+	g.Associate(x4, input1, sum, Attribute{Key: "order", Value: 0})
 
 	orderByContext := func(a, b Edge) bool {
 		if a.To().NodeKey() != b.To().NodeKey() {
 			return false
 		}
-		ca := a.Context()
-		cb := b.Context()
+		ca := a.Attributes()
+		cb := b.Attributes()
 		if len(ca) == 0 && len(cb) == 0 {
 			return false
 		}
-		idx, ok := ca[0].(int)
+		idx, ok := ca["order"].(int)
 		if ok {
-			idx2, ok2 := cb[0].(int)
+			idx2, ok2 := cb["order"].(int)
 			if ok2 {
 				return idx < idx2
 			}

@@ -11,8 +11,7 @@ type edge struct {
 	from       Node
 	to         Node
 	kind       EdgeKind
-	context    []interface{}
-	attributes map[string]interface{}
+	attributes []Attribute
 }
 
 func (e *edge) To() Node {
@@ -23,12 +22,16 @@ func (e *edge) From() Node {
 	return e.from
 }
 
-func (e *edge) Context() []interface{} {
-	return e.context
-}
-
 func (e *edge) Kind() EdgeKind {
 	return e.kind
+}
+
+func (e *edge) Attributes() map[string]interface{} {
+	m := map[string]interface{}{}
+	for _, a := range e.attributes {
+		m[a.Key] = a.Value
+	}
+	return m
 }
 
 func SortEdges(edges []Edge, less func(Edge, Edge) bool) {
