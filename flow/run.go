@@ -14,7 +14,7 @@ func (fg *FlowGraph) Run(ctx context.Context,
 	callback := make(chan map[xg.Node]xg.Awaitable)
 	id := flowID(time.Now().UnixNano())
 
-	fg.Log(id, "Run with input", args)
+	fg.Log("Start flow run", "id", id, "args", args)
 
 	for k, v := range args {
 		if ch, has := fg.input[k]; has {
@@ -26,7 +26,6 @@ func (fg *FlowGraph) Run(ctx context.Context,
 				from:     source,
 				callback: callback,
 				Awaitable: xg.Async(ctx, func() (interface{}, error) {
-					fg.Log(id, source, "Exec with value=", arg)
 					return arg, nil
 				}),
 			}

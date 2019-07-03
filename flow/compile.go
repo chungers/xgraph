@@ -2,9 +2,25 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 
 import (
 	"fmt"
+	"strings"
 
 	xg "github.com/orkestr8/xgraph"
 )
+
+func testOrderByContextIndex(a, b xg.Edge) bool {
+	ca := a.Attributes()
+	cb := b.Attributes()
+	if len(ca) > 0 && len(cb) > 0 {
+		idx, ok := ca["order"].(int)
+		if ok {
+			idx2, ok2 := cb["order"].(int)
+			if ok2 {
+				return idx < idx2
+			}
+		}
+	}
+	return strings.Compare(fmt.Sprintf("%v", a.From().NodeKey()), fmt.Sprintf("%v", b.From().NodeKey())) < 0
+}
 
 func (fg *FlowGraph) Compile() error {
 
@@ -61,30 +77,32 @@ func (fg *FlowGraph) Compile() error {
 				if !ok {
 					return
 				}
-				fg.Log(w.id, this, "Got work", w)
+				fg.Log("Got work", "id", w.id, "work", w)
 				// match messages by flow id.
 				inputMap, has := pending[w.id]
 				if !has {
 					inputMap = flowData{}
 					pending[w.id] = inputMap
 				}
-				if _, has := inputMap[w.from]; has {
-					fg.Log(w.id, this, "Duplicate awaitable for", w.from, "Ignored. input=", inputMap)
+				if prev, has := inputMap[w.from]; has {
+					// Warning that old value will be replaced by duplicate/new
+					fg.Warn("Duplicate awaitable", "id", w.id,
+						"from", w.from, "old", prev, "new", w)
 				}
 				inputMap[w.from] = w
 
 				if len(to) > 0 && !inputMap.matches(edgeSlice(to).from) {
 					// Nothing to do... just wait for message to come
-					fg.Log(w.id, this, "Keep waiting for more")
 					continue node_aggregator
 				}
 
-				fg.Log(w.id, this, "Got all input", inputMap, "given", to)
+				fg.Log("All input received", "id", w.id,
+					"input", inputMap, "given", to)
 
 				// Now inputs are collected.  Build another future and pass it on.
 				// TODO - context with timeout
 				if w.ctx == nil {
-					panic("nil ctx")
+					panic("nil ctx -- coding error. Must pass in context.")
 				}
 
 				ctx := w.ctx
@@ -108,8 +126,7 @@ func (fg *FlowGraph) Compile() error {
 							// Calling the Value or Error will block until completion
 							// TODO - a stuck future will lock this entirely. Add deadline.
 							if err := future.Error(); err != nil {
-								// TODO - chain errors
-								fg.Log(w.id, this, "Running and got error", err)
+								fg.Log("Error received", "id", w.id, "op", w, "err", err)
 								return nil, err
 							}
 							args = append(args, future.Value())
@@ -126,23 +143,21 @@ func (fg *FlowGraph) Compile() error {
 						return operator.OperatorFunc()(args)
 					}
 					result := fmt.Sprintf("call_%v(%v)", this.NodeKey(), args)
-					fg.Log(w.id, this, "Returning result", result)
 					return result, nil
 				})
 
 				result := work{ctx: w.ctx, id: w.id, from: this, Awaitable: future, callback: w.callback}
 
 				if len(outbound) == 0 {
-					fg.Log(w.id, this, "Sending graph output", result, "output", fg.output[this])
 					// write to the graph's output
 					fg.output[this] <- result
-					fg.Log(w.id, this, "Sent graph output")
+					fg.Log("Graph output", "id", w.id, "output", fg.output[this])
 				} else {
 					// write to downstream nodes
-					fg.Log(w.id, this, "Sending result downstream", result)
 					for _, ch := range outbound {
 						ch <- result
 					}
+					fg.Log("Send to downstream", "id", w.id, "result", result, "outbound", len(outbound))
 				}
 
 				// remove from pending
@@ -201,8 +216,6 @@ func (fg *FlowGraph) Compile() error {
 				return
 			}
 
-			fg.Log(w.id, fg.output, "Graph aggreagator got work", w)
-
 			// If there are multiple output nodes then we have to collect.
 			output := pending[w.id]
 
@@ -226,14 +239,15 @@ func (fg *FlowGraph) Compile() error {
 				}
 			}
 
-			fg.Log(w.id, "Collected all outputs", output)
 			delete(pending, w.id)
-			fg.Log(w.id, "Sending graph output", output)
+			fg.Log("Collected all outputs", "id", w.id, "output", output)
+
 			if w.callback == nil {
-				panic("nil callback")
+				panic("nil callback -- coding error: must provide callback")
 			}
+
 			w.callback <- output
-			fg.Log(w.id, "Sent output", output)
+			fg.Log("Sent output", "id", w.id, "output", output)
 			close(w.callback)
 		}
 	}()

@@ -7,7 +7,7 @@ import (
 	xg "github.com/orkestr8/xgraph"
 )
 
-func NewFlowGraphp(g xg.Graph, kind xg.EdgeKind) (*FlowGraph, error) {
+func NewFlowGraph(g xg.Graph, kind xg.EdgeKind) (*FlowGraph, error) {
 	fg := &FlowGraph{
 		Graph:      g,
 		Kind:       kind,
