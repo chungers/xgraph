@@ -23,7 +23,8 @@ func testDataVpc(t *testing.T) Graph {
 	az := []string{"az1", "az2"}
 
 	// Technique here uses embedded types to mark the different nodes types
-	// this will make it easy to look for to/from nodes of certain types after the edge is known.
+	// this will make it easy to look for to/from nodes of certain types
+	// after the edge is known.
 	type subnet_t struct {
 		*nodeT
 	}
@@ -147,8 +148,8 @@ func TestEncodeDotVpc(t *testing.T) {
 
 	buff, err := EncodeDot(g, dotOptions)
 	require.NoError(t, err)
-	fmt.Println(string(buff))
-
+	//fmt.Println(string(buff))
+	t.Log(string(buff))
 }
 
 func TestDecodeDot(t *testing.T) {
@@ -274,9 +275,72 @@ func TestEncodeDot(t *testing.T) {
 
 	buff, err := EncodeDot(g, dotOptions)
 	require.NoError(t, err)
-	fmt.Println(string(buff))
+	//fmt.Println(string(buff))
+	t.Log(string(buff))
 
 	dotOptions.EdgeLabelers = nil
 	_, err = EncodeDot(g, dotOptions)
 	require.NoError(t, err)
+}
+
+func TestDotEdgeLabels(t *testing.T) {
+
+	ed := &dotEdge{
+		edge: &edge{},
+	}
+	require.Equal(t, "", ed.label())
+
+	ed = &dotEdge{
+		edge: &edge{
+			attributes: []Attribute{
+				{Key: "foo", Value: "bar"},
+			},
+		},
+	}
+	require.Equal(t, "", ed.label())
+
+	ed = &dotEdge{
+		edge: &edge{
+			attributes: []Attribute{
+				{Key: "label", Value: "bar"},
+			},
+		},
+	}
+	require.Equal(t, "bar", ed.label())
+
+	label := "my label"
+	ed = &dotEdge{
+		edge: &edge{
+			attributes: []Attribute{
+				{
+					Key: "whatever",
+					Value: func(edge Edge) string {
+						return label
+					},
+				},
+			},
+		},
+	}
+	require.Equal(t, label, ed.label())
+
+	label2 := "my label2"
+	ed = &dotEdge{
+		edge: &edge{
+			attributes: []Attribute{
+				{
+					Key: "foo",
+					Value: func(edge Edge) string {
+						return label
+					},
+				},
+				{
+					Key: "bar",
+					Value: func(edge Edge) string {
+						return label2
+					},
+				},
+			},
+		},
+	}
+	require.Equal(t, label+","+label2, ed.label())
 }

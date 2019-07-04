@@ -9,6 +9,12 @@ type Attributer interface {
 	Attributes() map[string]interface{}
 }
 
+type OperatorFunc func([]interface{}) (interface{}, error)
+
+type Operator interface {
+	OperatorFunc() OperatorFunc
+}
+
 type Node interface {
 	NodeKeyer
 }

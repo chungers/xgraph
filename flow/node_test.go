@@ -1,4 +1,8 @@
-package xgraph // import "github.com/orkestr8/xgraph"
+package flow // import "github.com/orkestr8/xgraph/flow"
+
+import (
+	xg "github.com/orkestr8/xgraph"
+)
 
 type intNode int64
 
@@ -9,12 +13,12 @@ type nodeT struct {
 	attributes map[string]interface{}
 }
 
-func (n *nodeT) OperatorFunc() OperatorFunc {
+func (n *nodeT) OperatorFunc() xg.OperatorFunc {
 	return n.operator
 }
 
-func (n *nodeT) NodeKey() NodeKey {
-	return NodeKey(n.id)
+func (n *nodeT) NodeKey() xg.NodeKey {
+	return xg.NodeKey(n.id)
 }
 
 func (n *nodeT) String() string {
