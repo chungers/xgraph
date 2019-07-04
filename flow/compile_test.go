@@ -20,6 +20,23 @@ func (s testlog) Warn(context string, args ...interface{}) {
 	s.T.Log([]interface{}{"WARN", context, args}...)
 }
 
+type benchlog struct {
+	*testing.B
+	log bool
+}
+
+func (s benchlog) Log(context string, args ...interface{}) {
+	if s.log {
+		s.B.Log([]interface{}{"INFO", context, args}...)
+	}
+}
+
+func (s benchlog) Warn(context string, args ...interface{}) {
+	if s.log {
+		s.B.Log([]interface{}{"WARN", context, args}...)
+	}
+}
+
 func testBuildGraph(input xg.EdgeKind) xg.Graph {
 
 	print := func(nodeKey interface{}) xg.OperatorFunc {
@@ -65,4 +82,25 @@ func TestCompileExec(t *testing.T) {
 	flowGraph.EdgeLessFunc = testOrderByContextIndex
 
 	require.NoError(t, flowGraph.Compile())
+}
+
+func BenchmarkCompile(b *testing.B) {
+
+	input := xg.EdgeKind(1)
+	g := testBuildGraph(input)
+
+	flowGraph, err := NewFlowGraph(g, input)
+	if err != nil {
+		panic(err)
+	}
+
+	flowGraph.Logger = benchlog{B: b, log: false}
+	flowGraph.EdgeLessFunc = testOrderByContextIndex
+
+	for i := 0; i < b.N; i++ {
+		err = flowGraph.Compile()
+		if err != nil {
+			panic(err)
+		}
+	}
 }
