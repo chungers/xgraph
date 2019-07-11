@@ -1,6 +1,8 @@
 package flow // import "github.com/orkestr8/xgraph/flow"
 
 import (
+	"testing"
+
 	xg "github.com/orkestr8/xgraph"
 )
 
@@ -27,4 +29,8 @@ func (n *nodeT) String() string {
 
 func (n *nodeT) Attributes() map[string]interface{} {
 	return n.attributes
+}
+
+func TestGatherScatter(t *testing.T) {
+
 }

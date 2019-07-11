@@ -57,3 +57,27 @@ func (es *edgeSorter) Swap(i, j int) {
 func (es *edgeSorter) Less(i, j int) bool {
 	return es.less(es.slice[i], es.slice[j])
 }
+
+func (edges Edges) Slice() EdgeSlice {
+	all := EdgeSlice{}
+	for n := range edges {
+		all = append(all, n)
+	}
+	return all
+}
+
+func (s EdgeSlice) FromNodes() (from NodeSlice) {
+	from = make(NodeSlice, len(s))
+	for i := range s {
+		from[i] = s[i].From()
+	}
+	return
+}
+
+func (s EdgeSlice) ToNodes() (to NodeSlice) {
+	to = make(NodeSlice, len(s))
+	for i := range s {
+		to[i] = s[i].To()
+	}
+	return
+}

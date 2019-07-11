@@ -48,8 +48,10 @@ type GraphBuilder interface {
 }
 
 type Nodes <-chan Node
+type NodeSlice []Node
 
 type Edges <-chan Edge
+type EdgeSlice []Edge
 
 type NodesOrEdges interface {
 

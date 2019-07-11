@@ -102,7 +102,7 @@ func testDataVpc(t *testing.T) Graph {
 			return is
 		}
 
-		sn := NodeSlice(g.To(contains, hosts[i]).Nodes(onlySubnet))[0]
+		sn := g.To(contains, hosts[i]).Nodes(onlySubnet).Slice()[0]
 		g.Associate(disk, depends, sn)
 
 	}
@@ -110,14 +110,14 @@ func testDataVpc(t *testing.T) Graph {
 	// verify all disks have a dependency on the subnet
 	for _, d := range disks {
 
-		subnet, is := NodeSlice(g.From(d, depends).Nodes())[0].(*subnet_t)
+		subnet, is := g.From(d, depends).Nodes().Slice()[0].(*subnet_t)
 		require.True(t, is)
 
 		onlyDisks := func(n Node) bool {
 			_, is := n.(*device_t)
 			return is
 		}
-		require.Equal(t, 4, len(NodeSlice(g.To(depends, subnet).Nodes(onlyDisks))))
+		require.Equal(t, 4, len(g.To(depends, subnet).Nodes(onlyDisks).Slice()))
 	}
 
 	return g

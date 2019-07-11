@@ -205,8 +205,8 @@ func TestDirectedSortVisit(t *testing.T) {
 
 		n := forward[i]
 
-		upstream := EdgeSlice(g.To(next, n).Edges())
-		downstream := EdgeSlice(g.From(n, next).Edges())
+		upstream := g.To(next, n).Edges().Slice()
+		downstream := g.From(n, next).Edges().Slice()
 
 		switch {
 		case i == 0:
@@ -252,6 +252,6 @@ func TestGraphQueries(t *testing.T) {
 		g.Associate(that, likes, g.Node(NodeKey("David")))
 	}
 
-	require.Equal(t, m, len(NodeSlice(g.To(likes, g.Node("David")).Nodes())))
-	require.Equal(t, m*2, len(NodeSlice(g.From(g.Node("David"), likes).Nodes())))
+	require.Equal(t, m, len(g.To(likes, g.Node("David")).Nodes().Slice()))
+	require.Equal(t, m*2, len(g.From(g.Node("David"), likes).Nodes().Slice()))
 }
