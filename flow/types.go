@@ -49,4 +49,23 @@ type work struct {
 
 type flowData map[xg.Node]xg.Awaitable
 type links map[xg.Edge]chan work
-type collectors map[xg.Node]chan work
+
+type then xg.OperatorFunc
+
+type node struct {
+	xg.Node
+	input  *input
+	then   then
+	output *output
+}
+
+type input struct {
+	edges   xg.EdgeSlice
+	recv    []<-chan work
+	collect chan work
+}
+
+type output struct {
+	edges xg.EdgeSlice
+	send  []chan<- work
+}
