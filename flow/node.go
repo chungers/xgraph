@@ -8,13 +8,6 @@ import (
 	xg "github.com/orkestr8/xgraph"
 )
 
-type graph struct {
-	links   links
-	input   xg.NodeSlice
-	output  xg.NodeSlice
-	ordered []*node
-}
-
 func sendChannels(links links, edges xg.EdgeSlice) ([]chan<- work, error) {
 	out := []chan<- work{}
 	for _, edge := range edges {
@@ -67,70 +60,6 @@ func (node *node) close() {
 	node.input.close()
 }
 
-func analyze(g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice) (*graph, error) {
-	nodes := []*node{}
-	links := map[xg.Edge]chan work{}
-	graphInput := xg.NodeSlice{}
-	graphOutput := xg.NodeSlice{}
-
-	// First pass - build connections
-	for _, this := range ordered {
-		from := g.From(this, kind).Edges().Slice()
-		for _, edge := range from {
-			links[edge] = make(chan work)
-		}
-	}
-
-	// Second pass - build nodes and connect input/output
-	for i := range ordered {
-
-		this := ordered[i]
-
-		// Inputs TO the node:
-		to := g.To(kind, this).Edges().Slice()
-		// Outputs FROM the node:
-		from := g.From(this, kind).Edges().Slice()
-
-		collector := make(chan work)
-		recv, err := receiveChannels(links, to)
-		if err != nil {
-			return nil, err
-		}
-		send, err := sendChannels(links, from)
-		if err != nil {
-			return nil, err
-		}
-		node := &node{
-			Node: this,
-			input: &input{
-				edges:   to,
-				recv:    recv,
-				collect: collector,
-			},
-			output: &output{
-				edges: from,
-				send:  send,
-			},
-		}
-		if operator, is := this.(xg.Operator); is {
-			node.then = then(operator.OperatorFunc())
-		}
-
-		nodes = append(nodes, node)
-
-		if len(to) == 0 {
-			// No edges come TO this node, so it's an input node for the graph.
-			graphInput = append(graphInput, this)
-		}
-		if len(from) == 0 {
-			// No edges come FROM this node, so it's an output node for the graph.
-			graphOutput = append(graphOutput, this)
-		}
-	}
-
-	return &graph{links: links, input: graphInput, output: graphOutput, ordered: nodes}, nil
-}
-
 func (node *node) loop() {
 
 	pending := map[flowID]flowData{}
@@ -162,7 +91,7 @@ func (node *node) loop() {
 		w.Log("All input received", "id", w.id, "input", fd, "given", node.input.edges)
 
 		// Build Future here
-		ctx, _ := context.WithTimeout(w.ctx, 1*time.Second)
+		ctx, _ := context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
 		future := xg.Async(ctx, func() (interface{}, error) {
 			args, err := fd.args(ctx, node.input.edges)
 			if err != nil {

@@ -2,10 +2,12 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 
 import (
 	"context"
-	"fmt"
+	"time"
 
 	xg "github.com/orkestr8/xgraph"
 )
+
+type Duration time.Duration
 
 type Logger interface {
 	Log(string, ...interface{})
@@ -26,13 +28,14 @@ type FlowGraph struct {
 	aggregator chan work
 }
 
-type stdout int
-
-func (s stdout) Log(args ...interface{}) {
-	if s == 0 {
-		return
-	}
-	fmt.Println(args...)
+// graph is the executable representation.
+// analyze() generates this struct. In this struct, all the channels are
+// allocated and goroutines are ready to be started.
+type graph struct {
+	links   links
+	input   xg.NodeSlice
+	output  xg.NodeSlice
+	ordered []*node
 }
 
 type flowID int64
@@ -52,11 +55,16 @@ type links map[xg.Edge]chan work
 
 type then xg.OperatorFunc
 
+type attributes struct {
+	Timeout Duration `json:"timeout,omitempty"`
+}
+
 type node struct {
 	xg.Node
-	input  *input
-	then   then
-	output *output
+	attributes *attributes
+	input      *input
+	then       then
+	output     *output
 }
 
 type input struct {
