@@ -3,6 +3,7 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	xg "github.com/orkestr8/xgraph"
 )
@@ -19,8 +20,8 @@ func (m gather) hasKeys(gen func() xg.NodeSlice) bool {
 	return matches == len(test)
 }
 
-func (m gather) futuresForNodes(ctx context.Context, gen func() xg.NodeSlice) (futures []xg.Awaitable, err error) {
-	futures = []xg.Awaitable{}
+func (m gather) futuresForNodes(ctx context.Context, gen func() xg.NodeSlice) (futures []xg.Future, err error) {
+	futures = []xg.Future{}
 	ordered := gen()
 	for i := range ordered {
 		if future := m[ordered[i]]; future == nil {
@@ -33,32 +34,40 @@ func (m gather) futuresForNodes(ctx context.Context, gen func() xg.NodeSlice) (f
 	return
 }
 
-// Blocks until all futures completes.
-// input is an ordered slice of input edges, corresponding to the ordering of args.
-func (m gather) args(ctx context.Context, ordered xg.EdgeSlice) (args []interface{}, err error) {
+func waitFor(ctx context.Context, futures []xg.Future) ([]interface{}, error) {
 
-	futures, err := m.futuresForNodes(ctx, ordered.FromNodes)
-	if err != nil {
-		return nil, err
+	args := make([]interface{}, len(futures))
+
+	cases := []reflect.SelectCase{
+		{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(ctx.Done()),
+		},
+	}
+	for i := range futures {
+		cases = append(cases,
+			reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(futures[i].Ch()),
+			})
 	}
 
-	args = []interface{}{}
-	// Wait for all inputs to complete computation and build args
-	// for this node before proceeding with this node's computation.
-	for i, future := range futures {
-		// Calling the Value or Error will block until completion,
-		// but can be canceled or hit deadline.
-		select {
-		case <-ctx.Done():
-			err = fmt.Errorf("%v : Operator %v canceled while waiting for %v",
-				flowIDFrom(ctx), flowOperatorFrom(ctx), ordered[i])
-			return
-		default:
-			if err = future.Error(); err != nil {
-				return
+	for i := 0; i < len(futures); i++ {
+		// The channel used by the future isn't for passing values. It's only for signaling.
+		// Therefore, we don't need to get the value and should access the value of the future
+		// via the Value() and Error() methods.
+		index, _, ok := reflect.Select(cases)
+		if !ok {
+			cases[index].Chan = reflect.ValueOf(nil)
+			if index == 0 {
+				return nil, ctx.Err()
 			}
-			args = append(args, future.Value())
 		}
+		if err := futures[index-1].Error(); err != nil {
+			return nil, err
+		}
+		args[index-1] = futures[index-1].Value()
 	}
-	return
+
+	return args, nil
 }

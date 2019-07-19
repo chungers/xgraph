@@ -51,6 +51,7 @@ type work struct {
 }
 
 type gather map[xg.Node]xg.Awaitable
+
 type links map[xg.Edge]chan work
 
 type then xg.OperatorFunc

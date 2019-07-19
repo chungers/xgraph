@@ -49,7 +49,12 @@ func (node *node) loop() {
 		// Build Future here
 		ctx, _ := context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
 		future := xg.Async(ctx, func() (interface{}, error) {
-			args, err := gathered.args(ctx, node.input.edges)
+
+			futures, err := gathered.futuresForNodes(ctx, node.input.edges.FromNodes)
+			if err != nil {
+				return nil, err
+			}
+			args, err := waitFor(ctx, futures)
 			if err != nil {
 				return nil, err
 			}
