@@ -69,7 +69,7 @@ func (fg *FlowGraph) Compile() error {
 		aggregator := make(chan work)
 		go func() {
 
-			pending := map[flowID]flowData{}
+			pending := map[flowID]gather{}
 
 		node_aggregator:
 			for {
@@ -81,7 +81,7 @@ func (fg *FlowGraph) Compile() error {
 				// match messages by flow id.
 				inputMap, has := pending[w.id]
 				if !has {
-					inputMap = flowData{}
+					inputMap = gather{}
 					pending[w.id] = inputMap
 				}
 				if prev, has := inputMap[w.from]; has {
@@ -208,7 +208,7 @@ func (fg *FlowGraph) Compile() error {
 
 	// Start the aggregator
 	go func() {
-		pending := map[flowID]flowData{}
+		pending := map[flowID]gather{}
 	graph_aggregator:
 		for {
 			w, ok := <-fg.aggregator
@@ -222,7 +222,7 @@ func (fg *FlowGraph) Compile() error {
 			if len(fg.output) > 0 {
 
 				if output == nil {
-					output = flowData{
+					output = gather{
 						w.from: w,
 					}
 					pending[w.id] = output

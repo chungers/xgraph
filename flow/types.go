@@ -50,7 +50,7 @@ type work struct {
 	callback chan map[xg.Node]xg.Awaitable
 }
 
-type flowData map[xg.Node]xg.Awaitable
+type gather map[xg.Node]xg.Awaitable
 type links map[xg.Edge]chan work
 
 type then xg.OperatorFunc
