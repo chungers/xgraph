@@ -11,6 +11,7 @@ type Awaitable interface {
 }
 
 type Future interface {
+	Ch() <-chan interface{}
 	Value() interface{}
 	Error() error
 	Canceled() bool
@@ -42,6 +43,10 @@ func (f *future) wait() {
 			return
 		}
 	}
+}
+
+func (f *future) Ch() <-chan interface{} {
+	return f.done
 }
 
 func (f *future) Canceled() bool {
