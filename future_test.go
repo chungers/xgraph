@@ -62,6 +62,62 @@ func TestFutureUsageMultipleWaiters(t *testing.T) {
 	require.True(t, f.(*future).complete)
 }
 
+func TestFutureUsageMultipleWaitersOnChan(t *testing.T) {
+
+	start := make(chan interface{})
+
+	ctx := context.Background()
+	f := Async(ctx,
+		func() (interface{}, error) {
+
+			<-start
+
+			return "hello", nil
+		})
+
+	require.NotNil(t, f)
+
+	c := 5
+	results := make(chan interface{}, c)
+
+	var wg sync.WaitGroup
+	for i := 0; i < c; i++ {
+
+		wg.Add(1)
+		go func(i int) {
+
+			<-f.Ch()
+
+			require.Equal(t, "hello", f.Value())
+			require.NoError(t, f.Error())
+
+			results <- f.Value()
+
+			wg.Done()
+		}(i)
+	}
+
+	close(start)
+	wg.Wait()
+
+	close(results)
+
+	check := []interface{}{}
+	for i := 0; i < c; i++ {
+		require.Equal(t, nil, f.Error())
+		require.Equal(t, "hello", f.Value())
+		check = append(check, f.Value())
+	}
+
+	actual := []interface{}{}
+	for v := range results {
+		actual = append(actual, v)
+	}
+
+	require.Equal(t, check, actual)
+	require.True(t, f.(*future).complete)
+}
+
 func TestFutureUsageMultipleWaiters2(t *testing.T) {
 
 	seed := 100
