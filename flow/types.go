@@ -14,6 +14,10 @@ type Logger interface {
 	Warn(string, ...interface{})
 }
 
+type Options struct {
+	Logger
+}
+
 type FlowGraph struct {
 	Logger
 

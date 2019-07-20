@@ -4,7 +4,10 @@ import (
 	xg "github.com/orkestr8/xgraph"
 )
 
-func analyze(g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice) (*graph, error) {
+func analyze(g xg.Graph, kind xg.EdgeKind,
+	ordered xg.NodeSlice,
+	options Options) (*graph, error) {
+
 	nodes := []*node{}
 	links := map[xg.Edge]chan work{}
 	graphInput := xg.NodeSlice{}
@@ -39,7 +42,8 @@ func analyze(g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice) (*graph, error)
 		}
 		node := &node{
 			Node:       this,
-			attributes: &attributes{},
+			Logger:     options.Logger,
+			attributes: attributes{},
 			collect:    collect,
 			inbound:    inbound,
 			outbound:   outbound,
@@ -47,11 +51,14 @@ func analyze(g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice) (*graph, error)
 			output:     from,
 			stop:       make(chan interface{}),
 		}
+
+		node.defaults() // default fields if not set
+
 		if operator, is := this.(xg.Operator); is {
 			node.then = then(operator.OperatorFunc())
 		}
 		if attributer, is := this.(xg.Attributer); is {
-			attr := &attributes{}
+			attr := attributes{}
 			if err := attr.unmarshal(attributer.Attributes()); err != nil {
 				return nil, err
 			}
