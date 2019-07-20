@@ -8,6 +8,8 @@ import (
 	xg "github.com/orkestr8/xgraph"
 )
 
+type gather map[xg.Node]xg.Awaitable
+
 func (m gather) hasKeys(gen func() xg.NodeSlice) bool {
 	matches := 0
 	test := gen()

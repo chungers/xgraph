@@ -6,6 +6,8 @@ import (
 	xg "github.com/orkestr8/xgraph"
 )
 
+type links map[xg.Edge]chan work
+
 func sendChannels(links links, keys xg.EdgeSlice) ([]chan<- work, error) {
 	out := []chan<- work{}
 	for _, edge := range keys {

@@ -7,6 +7,20 @@ import (
 	xg "github.com/orkestr8/xgraph"
 )
 
+type node struct {
+	xg.Node
+	attributes *attributes
+	input      *input
+	then       then
+	output     *output
+}
+
+type then xg.OperatorFunc
+
+type attributes struct {
+	Timeout Duration `json:"timeout,omitempty"`
+}
+
 func (node *node) run() {
 	node.input.run()
 	go node.loop()

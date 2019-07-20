@@ -49,32 +49,3 @@ type work struct {
 	from     xg.Node
 	callback chan map[xg.Node]xg.Awaitable
 }
-
-type gather map[xg.Node]xg.Awaitable
-
-type links map[xg.Edge]chan work
-
-type then xg.OperatorFunc
-
-type attributes struct {
-	Timeout Duration `json:"timeout,omitempty"`
-}
-
-type node struct {
-	xg.Node
-	attributes *attributes
-	input      *input
-	then       then
-	output     *output
-}
-
-type input struct {
-	edges   xg.EdgeSlice
-	recv    []<-chan work
-	collect chan work
-}
-
-type output struct {
-	edges xg.EdgeSlice
-	send  []chan<- work
-}
