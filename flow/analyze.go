@@ -28,27 +28,24 @@ func analyze(g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice) (*graph, error)
 		// Outputs FROM the node:
 		from := g.From(this, kind).Edges().Slice()
 
-		collector := make(chan work)
-		recv, err := receiveChannels(links, to)
+		collect := make(chan work)
+		inbound, err := receiveChannels(links, to)
 		if err != nil {
 			return nil, err
 		}
-		send, err := sendChannels(links, from)
+		outbound, err := sendChannels(links, from)
 		if err != nil {
 			return nil, err
 		}
 		node := &node{
 			Node:       this,
 			attributes: &attributes{},
-			input: &input{
-				edges:   to,
-				recv:    recv,
-				collect: collector,
-			},
-			output: &output{
-				edges: from,
-				send:  send,
-			},
+			collect:    collect,
+			inbound:    inbound,
+			outbound:   outbound,
+			input:      to,
+			output:     from,
+			stop:       make(chan interface{}),
 		}
 		if operator, is := this.(xg.Operator); is {
 			node.then = then(operator.OperatorFunc())

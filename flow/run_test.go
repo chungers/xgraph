@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TODO - This one has a race.  Turn on go test -v -race
 func TestRun(t *testing.T) {
 
 	input := xg.EdgeKind(1)

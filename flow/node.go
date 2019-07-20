@@ -2,6 +2,7 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 
 import (
 	"context"
+	"reflect"
 	"time"
 
 	xg "github.com/orkestr8/xgraph"
@@ -9,10 +10,15 @@ import (
 
 type node struct {
 	xg.Node
+	Logger
 	attributes *attributes
-	input      *input
+	input      xg.EdgeSlice
+	inbound    []<-chan work
+	collect    chan work
 	then       then
-	output     *output
+	output     xg.EdgeSlice
+	outbound   []chan<- work
+	stop       chan interface{}
 }
 
 type then xg.OperatorFunc
@@ -21,21 +27,70 @@ type attributes struct {
 	Timeout Duration `json:"timeout,omitempty"`
 }
 
+func (node *node) dispatch(w work) {
+	for _, c := range node.outbound {
+		c <- w
+	}
+}
+
+func (node *node) gather() {
+
+	defer close(node.collect) // when gather completes, the other loop receiving from collect stops
+
+	cases := []reflect.SelectCase{
+		{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(node.stop),
+		},
+	}
+	for i := range node.inbound {
+		cases = append(cases, reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(node.inbound[i]),
+		})
+	}
+	open := len(node.inbound) // track number of closed channels.  When all are closed, exit.
+loop:
+	for {
+		index, value, ok := reflect.Select(cases)
+		if !ok {
+			open--
+			if open == 0 || index == 0 { // all closed or if stop is closed
+				return
+			}
+			cases[index].Chan = reflect.ValueOf(nil)
+			continue loop
+		}
+		if value.Interface() == nil {
+			continue loop
+		}
+		work, is := value.Interface().(work)
+		if !is {
+			continue loop
+		}
+		node.collect <- work
+	}
+}
+
 func (node *node) run() {
-	node.input.run()
-	go node.loop()
+	go node.gather()
+	go node.scatter()
 }
 
 func (node *node) close() {
-	node.input.close()
+	if node.stop == nil {
+		return
+	}
+	close(node.stop)
+	node.stop = nil
 }
 
-func (node *node) loop() {
+func (node *node) scatter() {
 
 	pending := map[flowID]gather{}
 
 	for {
-		w, ok := <-node.input.collect
+		w, ok := <-node.collect
 		if !ok {
 			return
 		}
@@ -53,18 +108,18 @@ func (node *node) loop() {
 		}
 		gathered[w.from] = w
 
-		if len(node.input.edges) > 0 && !gathered.hasKeys(xg.EdgeSlice(node.input.edges).FromNodes) {
+		if len(node.input) > 0 && !gathered.hasKeys(node.input.FromNodes) {
 			// Nothing to do... just wait for message to come
 			continue
 		}
 
-		w.Log("All input received", "id", w.id, "input", gathered, "given", node.input.edges)
+		w.Log("All input received", "id", w.id, "input", gathered, "given", node.input)
 
 		// Build Future here
 		ctx, _ := context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
 		future := xg.Async(ctx, func() (interface{}, error) {
 
-			futures, err := gathered.futuresForNodes(ctx, node.input.edges.FromNodes)
+			futures, err := gathered.futuresForNodes(ctx, node.input.FromNodes)
 			if err != nil {
 				return nil, err
 			}
@@ -76,7 +131,7 @@ func (node *node) loop() {
 		})
 
 		// Scatter / dispatch work
-		node.output.dispatch(work{ctx: w.ctx, id: w.id, from: node.Node, Awaitable: future, callback: w.callback})
+		node.dispatch(work{ctx: w.ctx, id: w.id, from: node.Node, Awaitable: future, callback: w.callback})
 
 		// remove from pending list
 		delete(pending, w.id)
