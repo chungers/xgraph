@@ -47,10 +47,16 @@ func waitFor(ctx context.Context, futures []xg.Future) ([]interface{}, error) {
 		},
 	}
 	for i := range futures {
+		ch := reflect.ValueOf(nil)
+		if futures[i] != nil {
+			if v := futures[i].Ch(); v != nil {
+				ch = reflect.ValueOf(v)
+			}
+		}
 		cases = append(cases,
 			reflect.SelectCase{
 				Dir:  reflect.SelectRecv,
-				Chan: reflect.ValueOf(futures[i].Ch()),
+				Chan: ch,
 			})
 	}
 

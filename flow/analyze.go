@@ -40,6 +40,10 @@ func analyze(g xg.Graph, kind xg.EdgeKind,
 		if err != nil {
 			return nil, err
 		}
+
+		inputFromNodes := to.FromNodes()
+		outputToNodes := from.ToNodes()
+
 		node := &node{
 			Node:       this,
 			Logger:     options.Logger,
@@ -47,8 +51,8 @@ func analyze(g xg.Graph, kind xg.EdgeKind,
 			collect:    collect,
 			inbound:    inbound,
 			outbound:   outbound,
-			input:      to,
-			output:     from,
+			inputFrom:  func() xg.NodeSlice { return inputFromNodes },
+			outputTo:   func() xg.NodeSlice { return outputToNodes },
 			stop:       make(chan interface{}),
 		}
 

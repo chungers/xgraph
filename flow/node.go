@@ -15,8 +15,8 @@ type node struct {
 	xg.Node
 	Logger
 	attributes attributes
-	input      xg.EdgeSlice
-	output     xg.EdgeSlice
+	inputFrom  func() xg.NodeSlice
+	outputTo   func() xg.NodeSlice
 
 	inbound  []<-chan work
 	collect  chan work
@@ -65,6 +65,38 @@ func (node *node) dispatch(w work) {
 	for _, c := range node.outbound {
 		c <- w
 	}
+}
+
+// run() blocks until gather and scatter are all running to avoid races.
+func (node *node) run() {
+	if node.stop == nil {
+		panic(fmt.Errorf("node.stop == nil. run() is not idempotent."))
+	}
+	go node.gather()
+	go node.scatter()
+
+	node.tasks.waitUntil(taskGather, taskScatter)
+	node.Log("Started")
+	return
+}
+
+func (node *node) Close() (err error) {
+	defer func() {
+		e := recover()
+		if e, is := e.(error); is {
+			err = e
+		} else {
+			err = fmt.Errorf("Error closing node %v: %v", node.Node, e)
+		}
+		return
+	}()
+	if node.stop == nil {
+		return
+	}
+	close(node.stop)
+
+	node.tasks.waitUntilDone(taskGather, taskScatter)
+	return
 }
 
 const (
@@ -122,38 +154,6 @@ loop:
 	}
 }
 
-// run() blocks until gather and scatter are all running to avoid races.
-func (node *node) run() {
-	if node.stop == nil {
-		panic(fmt.Errorf("node.stop == nil. run() is not idempotent."))
-	}
-	go node.gather()
-	go node.scatter()
-
-	node.tasks.waitUntil(taskGather, taskScatter)
-	node.Log("Started")
-	return
-}
-
-func (node *node) Close() (err error) {
-	defer func() {
-		e := recover()
-		if e, is := e.(error); is {
-			err = e
-		} else {
-			err = fmt.Errorf("Error closing node %v: %v", node.Node, e)
-		}
-		return
-	}()
-	if node.stop == nil {
-		return
-	}
-	close(node.stop)
-
-	node.tasks.waitUntilDone(taskGather, taskScatter)
-	return
-}
-
 func (node *node) scatter() {
 	defer node.tasks.done(taskScatter)
 
@@ -176,7 +176,9 @@ loop:
 			if !ok {
 				return
 			}
-			w.Log("Got work", "id", w.id, "work", w)
+
+			node.Log("Got work", "id", w.id, "work", w)
+
 			// match messages by flow id.
 			gathered, has := pending[w.id]
 			if !has {
@@ -190,18 +192,18 @@ loop:
 			}
 			gathered[w.from] = w
 
-			if len(node.input) > 0 && !gathered.hasKeys(node.input.FromNodes) {
+			if len(node.inputFrom()) > 0 && !gathered.hasKeys(node.inputFrom) {
 				// Nothing to do... just wait for message to come
 				continue loop
 			}
 
-			w.Log("All input received", "id", w.id, "input", gathered, "given", node.input)
+			node.Log("All input received", "id", w.id, "input", gathered, "given", node.inputFrom())
 
 			// Build Future here
 			ctx, _ := context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
 			future := xg.Async(ctx, func() (interface{}, error) {
 
-				futures, err := gathered.futuresForNodes(ctx, node.input.FromNodes)
+				futures, err := gathered.futuresForNodes(ctx, node.inputFrom)
 				if err != nil {
 					return nil, err
 				}
@@ -209,7 +211,10 @@ loop:
 				if err != nil {
 					return nil, err
 				}
-				return node.then(args) // TODO - also pass in ctx?
+
+				// TODO - also pass in ctx?
+				// TODO - use sync.Semaphore to set max concurrent then()?
+				return node.then(args)
 			})
 
 			// Scatter / dispatch work
