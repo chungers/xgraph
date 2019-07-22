@@ -33,8 +33,21 @@ func (n *nodeT) Attributes() map[string]interface{} {
 	return n.attributes
 }
 
+func TestNodeStartStop(t *testing.T) {
+	n := &node{
+		Node: &nodeT{id: "1"},
+	}
+
+	n.defaults()
+	t.Log("starting")
+	go n.run()
+
+	t.Log("closing")
+	n.Close() // this will cause the collection loop to end
+}
+
 func TestNodeGather(t *testing.T) {
-	count := 3
+	count := 5
 	inbound := make([]chan work, count)
 	typed := make([]<-chan work, count)
 	for i := range inbound {
@@ -87,12 +100,13 @@ func TestNodeGather(t *testing.T) {
 		collected <- m
 		close(collected)
 	}()
+
 	// start test
 	close(start)
 
 	expected := <-sent
 
-	n.close() // this will cause the collection loop to end
+	n.Close() // this will cause the collection loop to end
 
 	received := <-collected
 

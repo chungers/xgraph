@@ -3,14 +3,15 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 import (
 	"context"
 	"fmt"
+	"io"
 	"reflect"
-	"sync"
 	"time"
 
 	xg "github.com/orkestr8/xgraph"
 )
 
 type node struct {
+	io.Closer
 	xg.Node
 	Logger
 	attributes attributes
@@ -22,7 +23,8 @@ type node struct {
 	then     then
 	outbound []chan<- work
 	stop     chan interface{}
-	tasks    sync.WaitGroup
+
+	tasks *stopper
 }
 
 type then xg.OperatorFunc
@@ -53,6 +55,9 @@ func (node *node) defaults() *node {
 			return nil, nil
 		}
 	}
+	if node.tasks == nil {
+		node.tasks = &stopper{}
+	}
 	return node
 }
 
@@ -62,11 +67,15 @@ func (node *node) dispatch(w work) {
 	}
 }
 
+const (
+	taskGather = iota
+	taskScatter
+)
+
 func (node *node) gather() {
-	node.tasks.Add(1)
 	defer func() {
 		close(node.collect) // when gather completes, the other loop receiving from collect stops
-		node.tasks.Done()
+		node.tasks.done(taskGather)
 	}()
 
 	if node.stop == nil {
@@ -85,6 +94,10 @@ func (node *node) gather() {
 			Chan: reflect.ValueOf(node.inbound[i]),
 		})
 	}
+
+	node.tasks.add(taskGather, node.stop)
+	node.Log("node.scatter", "node", node.Node)
+
 	open := len(node.inbound) // track number of closed channels.  When all are closed, exit.
 loop:
 	for {
@@ -99,85 +112,111 @@ loop:
 			continue loop
 		}
 		if value.Interface() == nil {
-			panic(fmt.Errorf("value.Interface() cannot be nil."))
+			panic(fmt.Errorf("Assert: value.Interface() cannot be nil."))
 		}
 		work, is := value.Interface().(work)
 		if !is {
-			panic(fmt.Errorf("value.Interface() must be instance of work: %v", value))
+			panic(fmt.Errorf("Assert: value.Interface() must be instance of work: %v", value))
 		}
 		node.collect <- work
 	}
 }
 
+// run() blocks until gather and scatter are all running to avoid races.
 func (node *node) run() {
 	if node.stop == nil {
-		panic(fmt.Errorf("Already stopped."))
+		panic(fmt.Errorf("node.stop == nil. run() is not idempotent."))
 	}
 	go node.gather()
 	go node.scatter()
+
+	node.tasks.waitUntil(taskGather, taskScatter)
+	node.Log("Started")
+	return
 }
 
-func (node *node) close() {
+func (node *node) Close() (err error) {
+	defer func() {
+		e := recover()
+		if e, is := e.(error); is {
+			err = e
+		} else {
+			err = fmt.Errorf("Error closing node %v: %v", node.Node, e)
+		}
+		return
+	}()
 	if node.stop == nil {
 		return
 	}
 	close(node.stop)
 
-	// waits for gather/scatter to complete
-	node.tasks.Wait()
+	node.tasks.waitUntilDone(taskGather, taskScatter)
+	return
 }
 
 func (node *node) scatter() {
-	node.tasks.Add(1)
-	defer node.tasks.Done()
+	defer node.tasks.done(taskScatter)
 
 	pending := map[flowID]gather{}
 
+	cancel := make(chan interface{})
+	node.tasks.add(taskScatter, cancel)
+
+	node.Log("node.scatter", "node", node.Node)
+
+loop:
 	for {
-		w, ok := <-node.collect
-		if !ok {
+		select {
+
+		case <-cancel:
+			node.Log("Exiting scatter", "node", node.Node)
 			return
-		}
-		w.Log("Got work", "id", w.id, "work", w)
-		// match messages by flow id.
-		gathered, has := pending[w.id]
-		if !has {
-			gathered = gather{}
-			pending[w.id] = gathered
-		}
-		if prev, has := gathered[w.from]; has {
-			// Warning that old value will be replaced by duplicate/new
-			w.Warn("Duplicate awaitable", "id", w.id,
-				"from", w.from, "old", prev, "new", w)
-		}
-		gathered[w.from] = w
 
-		if len(node.input) > 0 && !gathered.hasKeys(node.input.FromNodes) {
-			// Nothing to do... just wait for message to come
-			continue
-		}
-
-		w.Log("All input received", "id", w.id, "input", gathered, "given", node.input)
-
-		// Build Future here
-		ctx, _ := context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
-		future := xg.Async(ctx, func() (interface{}, error) {
-
-			futures, err := gathered.futuresForNodes(ctx, node.input.FromNodes)
-			if err != nil {
-				return nil, err
+		case w, ok := <-node.collect:
+			if !ok {
+				return
 			}
-			args, err := waitFor(ctx, futures)
-			if err != nil {
-				return nil, err
+			w.Log("Got work", "id", w.id, "work", w)
+			// match messages by flow id.
+			gathered, has := pending[w.id]
+			if !has {
+				gathered = gather{}
+				pending[w.id] = gathered
 			}
-			return node.then(args) // TODO - also pass in ctx?
-		})
+			if prev, has := gathered[w.from]; has {
+				// Warning that old value will be replaced by duplicate/new
+				w.Warn("Duplicate awaitable", "id", w.id,
+					"from", w.from, "old", prev, "new", w)
+			}
+			gathered[w.from] = w
 
-		// Scatter / dispatch work
-		node.dispatch(work{ctx: w.ctx, id: w.id, from: node.Node, Awaitable: future, callback: w.callback})
+			if len(node.input) > 0 && !gathered.hasKeys(node.input.FromNodes) {
+				// Nothing to do... just wait for message to come
+				continue loop
+			}
 
-		// remove from pending list
-		delete(pending, w.id)
+			w.Log("All input received", "id", w.id, "input", gathered, "given", node.input)
+
+			// Build Future here
+			ctx, _ := context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
+			future := xg.Async(ctx, func() (interface{}, error) {
+
+				futures, err := gathered.futuresForNodes(ctx, node.input.FromNodes)
+				if err != nil {
+					return nil, err
+				}
+				args, err := waitFor(ctx, futures)
+				if err != nil {
+					return nil, err
+				}
+				return node.then(args) // TODO - also pass in ctx?
+			})
+
+			// Scatter / dispatch work
+			node.dispatch(work{ctx: w.ctx, id: w.id, from: node.Node, Awaitable: future, callback: w.callback})
+
+			// remove from pending list
+			delete(pending, w.id)
+		}
 	}
 }
