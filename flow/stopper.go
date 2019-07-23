@@ -24,34 +24,40 @@ func (s *stopper) done(key interface{}) {
 	delete(s.notify, key)
 }
 
+// waitUntil waits (spins) in the current thread/ goroutine
+// until the given keys appear.
 func (s *stopper) waitUntil(key interface{}, other ...interface{}) {
 	keys := append([]interface{}{key}, other...)
 	total := 0
 	for {
+		s.lock.RLock()
 		for k := range keys {
-			s.lock.RLock()
-			if _, has := s.notify[k]; has {
+			_, has := s.notify[k]
+			if has {
 				total += 1
 			}
-			s.lock.RUnlock()
 		}
+		s.lock.RUnlock()
 		if total == len(keys) {
 			return
 		}
 	}
 }
 
+// waitUntilDone waits (spins) in the current goroutine
+// until the given keys are removed via the done() call.
 func (s *stopper) waitUntilDone(key interface{}, other ...interface{}) {
 	keys := append([]interface{}{key}, other...)
 	total := len(keys)
 	for {
+		s.lock.RLock()
 		for k := range keys {
-			s.lock.RLock()
-			if _, has := s.notify[k]; !has {
-				total--
+			_, has := s.notify[k]
+			if !has {
+				total += -1
 			}
-			s.lock.RUnlock()
 		}
+		s.lock.RUnlock()
 
 		if total == 0 {
 			return
