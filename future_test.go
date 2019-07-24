@@ -2,7 +2,6 @@ package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -232,7 +231,6 @@ func TestFutureUsageMultipleWaitersInjectValues(t *testing.T) {
 	for v := range results {
 		actual = append(actual, v)
 	}
-	fmt.Println(">>> 3")
 	require.Equal(t, []interface{}{"world", "world", "world"}, actual)
 	require.False(t, f.Canceled())
 	require.False(t, f.DeadlineExceeded())
