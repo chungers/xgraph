@@ -30,6 +30,15 @@ type future struct {
 	done  chan interface{}
 }
 
+func (f *future) Ch() <-chan interface{} {
+	c := make(chan interface{})
+	go func() {
+		f.Wait()
+		close(c)
+	}()
+	return c
+}
+
 func (f *future) doAsync(ctx context.Context) {
 	f.Add(1)
 	go func() {
@@ -39,6 +48,7 @@ func (f *future) doAsync(ctx context.Context) {
 			v, e := f.do()
 			f.Yield(v, e)
 			close(done)
+			return
 		}()
 
 		select {
@@ -49,10 +59,6 @@ func (f *future) doAsync(ctx context.Context) {
 			return
 		}
 	}()
-}
-
-func (f *future) Ch() <-chan interface{} {
-	return f.done
 }
 
 func (f *future) Canceled() bool {
