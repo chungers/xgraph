@@ -20,74 +20,78 @@ type Future interface {
 type Do func() (interface{}, error)
 
 type future struct {
-	ctx      context.Context
-	do       Do
-	value    interface{}
-	err      error
-	done     chan interface{}
-	complete bool
-	lock     sync.RWMutex
+	sync.WaitGroup
+	sync.RWMutex
+
+	do    Do
+	value interface{}
+	err   error
+	done  chan interface{}
 }
 
-func (f *future) wait() {
-	defer func() { f.complete = true }()
-	for {
+func (f *future) doAsync(ctx context.Context) {
+	f.Add(1)
+	go func() {
+
+		done := make(chan interface{})
+		go func() {
+			v, e := f.do()
+			f.Yield(v, e)
+			close(done)
+		}()
+
 		select {
-		case <-f.done:
+		case <-ctx.Done():
+			f.Yield(nil, ctx.Err())
 			return
-		case <-f.ctx.Done():
-			if !f.complete {
-				close(f.done)
-			}
+		case <-done:
 			return
 		}
-	}
+	}()
+}
+
+func (f future) wait() {
+	<-f.done
 }
 
 func (f *future) Canceled() bool {
-	return f.ctx.Err() == context.Canceled
+	f.Wait()
+	f.RLock()
+	defer f.RUnlock()
+	return f.err == context.Canceled
 }
 
 func (f *future) DeadlineExceeded() bool {
-	return f.ctx.Err() == context.DeadlineExceeded
+	f.Wait()
+	f.RLock()
+	defer f.RUnlock()
+	return f.err == context.DeadlineExceeded
 }
 
 func (f *future) Yield(v interface{}, err error) {
-	f.results(v, err)
-}
-
-func (f *future) results(v interface{}, err error) {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-	// complete is set to true exactly once, when wait completes
-	// after that the value/err cannot be changed.
-	if !f.complete {
+	f.Lock()
+	defer f.Unlock()
+	if f.done != nil {
 		f.value = v
 		f.err = err
 		close(f.done)
+		f.done = nil
+		f.Done()
 	}
 }
 
 func (f *future) Value() interface{} {
-	f.wait()
-	f.lock.RLock()
-	defer f.lock.RUnlock()
+	f.Wait()
+	f.RLock()
+	defer f.RUnlock()
 	return f.value
 }
 
 func (f *future) Error() error {
-	f.wait()
-	f.lock.RLock()
-	defer f.lock.RUnlock()
+	f.Wait()
+	f.RLock()
+	defer f.RUnlock()
 	return f.err
-}
-
-func (f *future) doAsync(ctx context.Context) {
-	f.ctx = ctx
-	go func() {
-		f.results(f.do())
-		return
-	}()
 }
 
 func newFuture(do Do) *future {

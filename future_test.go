@@ -2,6 +2,7 @@ package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -59,7 +60,6 @@ func TestFutureUsageMultipleWaiters(t *testing.T) {
 	}
 
 	require.Equal(t, check, actual)
-	require.True(t, f.(*future).complete)
 }
 
 func TestFutureUsageMultipleWaiters2(t *testing.T) {
@@ -79,7 +79,7 @@ func TestFutureUsageMultipleWaiters2(t *testing.T) {
 
 	f.doAsync(context.Background())
 
-	c := 10000
+	c := 5000
 	results := make(chan interface{}, c)
 
 	sum := 0
@@ -112,7 +112,6 @@ func TestFutureUsageMultipleWaiters2(t *testing.T) {
 	}
 
 	require.Equal(t, sum, actual)
-	require.True(t, f.complete)
 }
 
 func TestFutureUsageMultipleWaitersCancellation(t *testing.T) {
@@ -132,26 +131,33 @@ func TestFutureUsageMultipleWaitersCancellation(t *testing.T) {
 	require.NotNil(t, f)
 
 	c := 5
+
 	results := make(chan interface{}, c)
 
-	var wg, wg2 sync.WaitGroup
+	var wg, wg2, wg3 sync.WaitGroup
 	for i := 0; i < c; i++ {
 
 		go func(i int) {
 
 			wg.Done()
 
-			require.Equal(t, nil, f.Value())
-			require.NoError(t, f.Error())
+			v := f.Value()
+			e := f.Error()
+
+			require.Equal(t, nil, v)
+			require.Error(t, e)
+			require.True(t, f.Canceled())
 
 			wg2.Done()
 
 			results <- f.Value()
 
+			wg3.Done()
 		}(i)
 
 		wg.Add(1)
 		wg2.Add(1)
+		wg3.Add(1)
 	}
 
 	wg.Wait()
@@ -160,6 +166,8 @@ func TestFutureUsageMultipleWaitersCancellation(t *testing.T) {
 	cancel()
 
 	wg2.Wait()
+
+	wg3.Wait()
 	close(results)
 
 	actual := []interface{}{}
@@ -172,7 +180,6 @@ func TestFutureUsageMultipleWaitersCancellation(t *testing.T) {
 	require.False(t, f.DeadlineExceeded())
 
 	close(start)
-	require.True(t, f.(*future).complete)
 }
 
 func TestFutureUsageMultipleWaitersInjectValues(t *testing.T) {
@@ -204,10 +211,9 @@ func TestFutureUsageMultipleWaitersInjectValues(t *testing.T) {
 			require.Equal(t, "world", f.Value())
 			require.NoError(t, f.Error())
 
-			wg2.Done()
-
 			results <- f.Value()
 
+			wg2.Done()
 		}(i)
 
 		wg.Add(1)
@@ -219,27 +225,27 @@ func TestFutureUsageMultipleWaitersInjectValues(t *testing.T) {
 	f.(Awaitable).Yield("world", nil)
 
 	wg2.Wait()
+
 	close(results)
 
 	actual := []interface{}{}
 	for v := range results {
 		actual = append(actual, v)
 	}
-
+	fmt.Println(">>> 3")
 	require.Equal(t, []interface{}{"world", "world", "world"}, actual)
 	require.False(t, f.Canceled())
 	require.False(t, f.DeadlineExceeded())
 
 	close(start)
-	require.True(t, f.(*future).complete)
 
 }
 
-func testFib(i int) int {
+func testFibRecursive(i int) int {
 	if i <= 1 {
 		return i
 	}
-	return testFib(i-1) + testFib(i-2)
+	return testFibRecursive(i-1) + testFibRecursive(i-2)
 }
 
 func testFibLoop(i int) int {
@@ -254,7 +260,7 @@ func testFibLoop(i int) int {
 
 func TestFutureUsageLongChain(t *testing.T) {
 
-	N := 50000
+	N := 100
 
 	start := make(chan interface{})
 
