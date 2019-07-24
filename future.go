@@ -11,6 +11,7 @@ type Awaitable interface {
 }
 
 type Future interface {
+	Ch() <-chan interface{}
 	Value() interface{}
 	Error() error
 	Canceled() bool
@@ -29,6 +30,10 @@ type future struct {
 	done  chan interface{}
 }
 
+func (f *future) Ch() <-chan interface{} {
+	return f.done
+}
+
 func (f *future) doAsync(ctx context.Context) {
 	f.Add(1)
 	go func() {
@@ -38,6 +43,7 @@ func (f *future) doAsync(ctx context.Context) {
 			v, e := f.do()
 			f.Yield(v, e)
 			close(done)
+			return
 		}()
 
 		select {
