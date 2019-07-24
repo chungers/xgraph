@@ -31,7 +31,12 @@ type future struct {
 }
 
 func (f *future) Ch() <-chan interface{} {
-	return f.done
+	c := make(chan interface{})
+	go func() {
+		f.Wait()
+		close(c)
+	}()
+	return c
 }
 
 func (f *future) doAsync(ctx context.Context) {
