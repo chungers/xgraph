@@ -4,7 +4,7 @@ import (
 	"context"
 	"sort"
 	"testing"
-	"time"
+	//	"time"
 
 	xg "github.com/orkestr8/xgraph"
 	"github.com/stretchr/testify/require"
@@ -120,7 +120,8 @@ func TestNodeGather(t *testing.T) {
 
 func TestNodeScatter(t *testing.T) {
 
-	outbound := make(chan work)
+	outbound1 := make(chan work, 1)
+	outbound2 := make(chan work, 1)
 
 	u1 := &nodeT{id: "upstream1"}
 	u2 := &nodeT{id: "upstream2"}
@@ -128,7 +129,7 @@ func TestNodeScatter(t *testing.T) {
 		Logger:    logger(1),
 		Node:      &nodeT{id: "operator"},
 		inputFrom: func() xg.NodeSlice { return []xg.Node{u1, u2} },
-		outbound:  []chan<- work{outbound},
+		outbound:  []chan<- work{outbound1, outbound2},
 		then: func(args []interface{}) (interface{}, error) {
 			// compute the sum
 			return args[0].(int) + args[1].(int), nil
@@ -138,28 +139,6 @@ func TestNodeScatter(t *testing.T) {
 	n.defaults()
 
 	go n.scatter()
-
-	done := make(chan interface{})
-	collected := make(chan []work)
-
-	go func() {
-		all := []work{}
-
-		defer func() {
-			collected <- all
-			close(collected)
-		}()
-
-		for {
-			select {
-			case <-done:
-				return
-			case w := <-outbound:
-				require.NotNil(t, w)
-				all = append(all, w)
-			}
-		}
-	}()
 
 	ctx := context.Background()
 	a1 := xg.Async(ctx, func() (interface{}, error) { return 100, nil })
@@ -172,14 +151,14 @@ func TestNodeScatter(t *testing.T) {
 		n.collect <- w
 	}
 
-	time.Sleep(1 * time.Second) // TODO - there's a race between done and <-outbound
+	for _, c := range []chan work{outbound1, outbound2} {
+		w := <-c
+		require.Equal(t, n.Node, w.from)
+		require.NotNil(t, w.Awaitable)
+		require.Equal(t, flowID(100), w.id)
+		require.Equal(t, 300, w.Value().(int))
+		require.Nil(t, w.Error())
+	}
 
-	close(done)
-	collect := <-collected
-	require.Equal(t, 1, len(collect))
-	require.Equal(t, n.Node, collect[0].from)
-	require.NotNil(t, collect[0].Awaitable)
-	require.Equal(t, flowID(100), collect[0].id)
-	require.Equal(t, 300, collect[0].Value().(int))
 	n.Close()
 }

@@ -200,7 +200,10 @@ loop:
 			node.Log("All input received", "id", w.id, "input", gathered, "given", node.inputFrom())
 
 			// Build Future here
-			ctx, _ := context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
+			ctx := w.ctx
+			if node.attributes.Timeout > 0 {
+				ctx, _ = context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
+			}
 			future := xg.Async(ctx, func() (interface{}, error) {
 
 				futures, err := gathered.futuresForNodes(ctx, node.inputFrom)
@@ -214,7 +217,6 @@ loop:
 
 				// TODO - also pass in ctx?
 				// TODO - use sync.Semaphore to set max concurrent then()?
-				fmt.Println(">>>> here", args)
 				return node.then(args)
 			})
 
