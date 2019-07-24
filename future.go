@@ -50,10 +50,6 @@ func (f *future) doAsync(ctx context.Context) {
 	}()
 }
 
-func (f future) wait() {
-	<-f.done
-}
-
 func (f *future) Canceled() bool {
 	f.Wait()
 	f.RLock()
@@ -71,13 +67,14 @@ func (f *future) DeadlineExceeded() bool {
 func (f *future) Yield(v interface{}, err error) {
 	f.Lock()
 	defer f.Unlock()
-	if f.done != nil {
-		f.value = v
-		f.err = err
-		close(f.done)
-		f.done = nil
-		f.Done()
+	if f.done == nil {
+		return
 	}
+	f.value = v
+	f.err = err
+	close(f.done)
+	f.done = nil
+	f.Done()
 }
 
 func (f *future) Value() interface{} {
