@@ -44,7 +44,7 @@ func TestSortEdges(t *testing.T) {
 		return false
 	}
 
-	input1s := EdgeSlice(g.To(input1, sum).Edges())
+	input1s := g.To(input1, sum).Edges().Slice()
 
 	t.Log(input1s)
 
@@ -64,7 +64,7 @@ func TestSortEdges(t *testing.T) {
 	g.Associate(x3, input2, sum)
 	g.Associate(x4, input2, sum)
 
-	input2s := EdgeSlice(g.To(input2, sum).Edges())
+	input2s := g.To(input2, sum).Edges().Slice()
 	SortEdges(input2s, orderByContext)
 
 	keys = []string{}

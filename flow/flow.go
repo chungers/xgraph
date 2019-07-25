@@ -1,9 +1,6 @@
 package flow // import "github.com/orkestr8/xgraph/flow"
 
 import (
-	"context"
-	"fmt"
-
 	xg "github.com/orkestr8/xgraph"
 )
 
@@ -16,55 +13,19 @@ func NewFlowGraph(g xg.Graph, kind xg.EdgeKind) (*FlowGraph, error) {
 		output:     map[xg.Node]chan work{},
 		aggregator: make(chan work),
 	}
-	flow, err := xg.DirectedSort(g, kind)
+	ordered, err := xg.DirectedSort(g, kind)
 	if err != nil {
 		return nil, err
 	}
 
-	fg.flow = flow
+	fg.ordered = ordered
 	return fg, nil
 }
 
-type stdout int
-
-func (s stdout) Log(args ...interface{}) {
-	if s == 0 {
-		return
+func (fg *FlowGraph) outputNodes() xg.NodeSlice {
+	out := xg.NodeSlice{}
+	for k := range fg.output {
+		out = append(out, k)
 	}
-	fmt.Println(args...)
-}
-
-type flowID int64
-
-type work struct {
-	xg.Awaitable
-
-	ctx      context.Context
-	id       flowID
-	from     xg.Node
-	callback chan map[xg.Node]xg.Awaitable
-}
-
-type flowData map[xg.Node]xg.Awaitable
-
-func (m flowData) matches(gen func() []xg.Node) bool {
-	matches := 0
-	test := gen()
-	for _, n := range test {
-		_, has := m[n]
-		if has {
-			matches++
-		}
-	}
-	return len(m) == len(test)
-}
-
-type edgeSlice []xg.Edge
-
-func (s edgeSlice) from() (from []xg.Node) {
-	from = make([]xg.Node, len(s))
-	for i := range s {
-		from[i] = s[i].From()
-	}
-	return
+	return out
 }

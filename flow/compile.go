@@ -25,14 +25,14 @@ func testOrderByContextIndex(a, b xg.Edge) bool {
 func (fg *FlowGraph) Compile() error {
 
 	edgeChannels := map[xg.Edge]chan work{}
-	flow := fg.flow
+	ordered := fg.ordered
 
-	for i := range flow {
+	for i := range ordered {
 
-		this := flow[i]
+		this := ordered[i]
 
-		to := xg.EdgeSlice(fg.To(fg.Kind, this).Edges())
-		from := xg.EdgeSlice(fg.From(this, fg.Kind).Edges())
+		to := fg.To(fg.Kind, this).Edges().Slice()
+		from := fg.From(this, fg.Kind).Edges().Slice()
 
 		// Build the output first.  For each output edge
 		// we create a work channel for downstream node to receive
@@ -69,7 +69,7 @@ func (fg *FlowGraph) Compile() error {
 		aggregator := make(chan work)
 		go func() {
 
-			pending := map[flowID]flowData{}
+			pending := map[flowID]gather{}
 
 		node_aggregator:
 			for {
@@ -81,7 +81,7 @@ func (fg *FlowGraph) Compile() error {
 				// match messages by flow id.
 				inputMap, has := pending[w.id]
 				if !has {
-					inputMap = flowData{}
+					inputMap = gather{}
 					pending[w.id] = inputMap
 				}
 				if prev, has := inputMap[w.from]; has {
@@ -91,7 +91,7 @@ func (fg *FlowGraph) Compile() error {
 				}
 				inputMap[w.from] = w
 
-				if len(to) > 0 && !inputMap.matches(edgeSlice(to).from) {
+				if len(to) > 0 && !inputMap.hasKeys(xg.EdgeSlice(to).FromNodes) {
 					// Nothing to do... just wait for message to come
 					continue node_aggregator
 				}
@@ -108,7 +108,7 @@ func (fg *FlowGraph) Compile() error {
 				ctx := w.ctx
 				received := w
 
-				future := xg.Async(ctx, func() (interface{}, error) {
+				future := Async(ctx, func() (interface{}, error) {
 
 					if len(to) == 0 {
 					}
@@ -208,7 +208,7 @@ func (fg *FlowGraph) Compile() error {
 
 	// Start the aggregator
 	go func() {
-		pending := map[flowID]flowData{}
+		pending := map[flowID]gather{}
 	graph_aggregator:
 		for {
 			w, ok := <-fg.aggregator
@@ -222,19 +222,13 @@ func (fg *FlowGraph) Compile() error {
 			if len(fg.output) > 0 {
 
 				if output == nil {
-					output = flowData{
+					output = gather{
 						w.from: w,
 					}
 					pending[w.id] = output
 				}
 
-				if !output.matches(func() (result []xg.Node) {
-					result = []xg.Node{}
-					for k := range fg.output {
-						result = append(result, k)
-					}
-					return
-				}) {
+				if !output.hasKeys(fg.outputNodes) {
 					continue graph_aggregator
 				}
 			}

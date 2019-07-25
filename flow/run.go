@@ -9,9 +9,9 @@ import (
 )
 
 func (fg *FlowGraph) Run(ctx context.Context,
-	args map[xg.Node]interface{}) (<-chan map[xg.Node]xg.Awaitable, error) {
+	args map[xg.Node]interface{}) (<-chan map[xg.Node]Awaitable, error) {
 
-	callback := make(chan map[xg.Node]xg.Awaitable)
+	callback := make(chan map[xg.Node]Awaitable)
 	id := flowID(time.Now().UnixNano())
 
 	fg.Log("Start flow run", "id", id, "args", args)
@@ -25,7 +25,7 @@ func (fg *FlowGraph) Run(ctx context.Context,
 				id:       id,
 				from:     source,
 				callback: callback,
-				Awaitable: xg.Async(ctx, func() (interface{}, error) {
+				Awaitable: Async(ctx, func() (interface{}, error) {
 					return arg, nil
 				}),
 			}

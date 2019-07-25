@@ -48,8 +48,10 @@ type GraphBuilder interface {
 }
 
 type Nodes <-chan Node
+type NodeSlice []Node
 
 type Edges <-chan Edge
+type EdgeSlice []Edge
 
 type NodesOrEdges interface {
 
@@ -58,7 +60,7 @@ type NodesOrEdges interface {
 	Nodes(...func(Node) bool) Nodes
 
 	// Edges returns the edges matching the selector. The selector is read-only and should not
-	// mutate the state of the graph via associate or adding new nodes
+	// mutate the state of the graph via associate or adding new edges
 	Edges(...func(Edge) bool) Edges
 }
 

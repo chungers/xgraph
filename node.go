@@ -30,3 +30,11 @@ func (q *nodesOrEdges) Nodes(optional ...func(Node) bool) Nodes {
 func (q *nodesOrEdges) Edges(optional ...func(Edge) bool) Edges {
 	return q.edges(optional)
 }
+
+func (nodes Nodes) Slice() NodeSlice {
+	all := NodeSlice{}
+	for n := range nodes {
+		all = append(all, n)
+	}
+	return all
+}
