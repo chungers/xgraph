@@ -8,7 +8,7 @@ import (
 	xg "github.com/orkestr8/xgraph"
 )
 
-type gather map[xg.Node]xg.Awaitable
+type gather map[xg.Node]Awaitable
 
 func (m gather) hasKeys(gen func() xg.NodeSlice) bool {
 	matches := 0
@@ -22,8 +22,8 @@ func (m gather) hasKeys(gen func() xg.NodeSlice) bool {
 	return matches == len(test)
 }
 
-func (m gather) futuresForNodes(ctx context.Context, gen func() xg.NodeSlice) (futures []xg.Future, err error) {
-	futures = []xg.Future{}
+func (m gather) futuresForNodes(ctx context.Context, gen func() xg.NodeSlice) (futures []Future, err error) {
+	futures = []Future{}
 	ordered := gen()
 	for i := range ordered {
 		if future := m[ordered[i]]; future == nil {
@@ -36,7 +36,7 @@ func (m gather) futuresForNodes(ctx context.Context, gen func() xg.NodeSlice) (f
 	return
 }
 
-func waitFor(ctx context.Context, futures []xg.Future) ([]interface{}, error) {
+func waitFor(ctx context.Context, futures []Future) ([]interface{}, error) {
 
 	args := make([]interface{}, len(futures))
 

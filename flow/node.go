@@ -204,7 +204,7 @@ loop:
 			if node.attributes.Timeout > 0 {
 				ctx, _ = context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
 			}
-			future := xg.Async(ctx, func() (interface{}, error) {
+			future := Async(ctx, func() (interface{}, error) {
 
 				futures, err := gathered.futuresForNodes(ctx, node.inputFrom)
 				if err != nil {

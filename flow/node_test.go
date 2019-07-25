@@ -141,8 +141,8 @@ func TestNodeScatter(t *testing.T) {
 	go n.scatter()
 
 	ctx := context.Background()
-	a1 := xg.Async(ctx, func() (interface{}, error) { return 100, nil })
-	a2 := xg.Async(ctx, func() (interface{}, error) { return 200, nil })
+	a1 := Async(ctx, func() (interface{}, error) { return 100, nil })
+	a2 := Async(ctx, func() (interface{}, error) { return 200, nil })
 
 	for _, w := range []work{
 		{id: 100, from: u1, ctx: ctx, Awaitable: a1},

@@ -108,7 +108,7 @@ func (fg *FlowGraph) Compile() error {
 				ctx := w.ctx
 				received := w
 
-				future := xg.Async(ctx, func() (interface{}, error) {
+				future := Async(ctx, func() (interface{}, error) {
 
 					if len(to) == 0 {
 					}

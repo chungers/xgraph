@@ -41,19 +41,19 @@ func TestOrderFutures(t *testing.T) {
 	ctx := context.Background()
 	done := make(chan interface{})
 
-	a1 := xg.Async(ctx, func() (interface{}, error) {
+	a1 := Async(ctx, func() (interface{}, error) {
 		<-done
 		return nil, nil
 	})
-	a2 := xg.Async(ctx, func() (interface{}, error) {
+	a2 := Async(ctx, func() (interface{}, error) {
 		<-done
 		return nil, nil
 	})
-	a3 := xg.Async(ctx, func() (interface{}, error) {
+	a3 := Async(ctx, func() (interface{}, error) {
 		<-done
 		return nil, nil
 	})
-	a4 := xg.Async(ctx, func() (interface{}, error) {
+	a4 := Async(ctx, func() (interface{}, error) {
 		<-done
 		return nil, nil
 	})
@@ -68,7 +68,7 @@ func TestOrderFutures(t *testing.T) {
 			return xg.NodeSlice{n1, n2}
 		})
 	require.NoError(t, err)
-	require.Equal(t, []xg.Future{a1, a2}, f)
+	require.Equal(t, []Future{a1, a2}, f)
 
 	f, err = gs.futuresForNodes(ctx,
 		func() xg.NodeSlice {
@@ -80,13 +80,13 @@ func TestOrderFutures(t *testing.T) {
 func TestWaitForNormal(t *testing.T) {
 
 	c := []chan interface{}{}
-	f := []xg.Future{}
+	f := []Future{}
 
 	ctx := context.Background()
 
 	for i := 0; i < 5; i++ {
 		cc := make(chan interface{})
-		aa := xg.Async(ctx, func() (interface{}, error) {
+		aa := Async(ctx, func() (interface{}, error) {
 			v := <-cc
 			return v, nil
 		})
@@ -123,12 +123,12 @@ func TestWaitForNormal(t *testing.T) {
 func TestWaitForContextCancel(t *testing.T) {
 
 	block := make(chan interface{})
-	f := []xg.Future{}
+	f := []Future{}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	for i := 0; i < 5; i++ {
-		aa := xg.Async(ctx, func() (interface{}, error) {
+		aa := Async(ctx, func() (interface{}, error) {
 			<-block
 			return i, nil
 		})
@@ -153,14 +153,14 @@ func TestWaitForContextCancel(t *testing.T) {
 func TestWaitForContextAsyncError(t *testing.T) {
 
 	c := []chan interface{}{}
-	f := []xg.Future{}
+	f := []Future{}
 	verr := fmt.Errorf("boom")
 	v := []interface{}{5, 4, 3, 2, 1, verr}
 	ctx, _ := context.WithCancel(context.Background())
 
 	for i := 0; i < len(v); i++ {
 		cc := make(chan interface{})
-		aa := xg.Async(ctx, func() (interface{}, error) {
+		aa := Async(ctx, func() (interface{}, error) {
 			x := <-cc
 			if x, is := x.(error); is {
 				return nil, x
@@ -192,13 +192,13 @@ func TestWaitForContextAsyncError(t *testing.T) {
 func TestWaitForContextTimeout(t *testing.T) {
 
 	c := []chan interface{}{}
-	f := []xg.Future{}
+	f := []Future{}
 	v := []interface{}{5, 4, 3, 2, 1}
 	ctx, _ := context.WithTimeout(context.Background(), 500*time.Millisecond)
 
 	for i := 0; i < len(v); i++ {
 		cc := make(chan interface{})
-		aa := xg.Async(ctx, func() (interface{}, error) {
+		aa := Async(ctx, func() (interface{}, error) {
 			x := <-cc
 			if x, is := x.(error); is {
 				return nil, x

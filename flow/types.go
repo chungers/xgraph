@@ -45,11 +45,11 @@ type graph struct {
 type flowID int64
 
 type work struct {
-	xg.Awaitable
+	Awaitable
 	Logger
 
 	ctx      context.Context
 	id       flowID
 	from     xg.Node
-	callback chan map[xg.Node]xg.Awaitable
+	callback chan map[xg.Node]Awaitable
 }

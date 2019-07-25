@@ -1,4 +1,4 @@
-package xgraph // import "github.com/orkestr8/xgraph"
+package flow // import "github.com/orkestr8/xgraph/flow"
 
 import (
 	"context"
