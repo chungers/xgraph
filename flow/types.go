@@ -51,5 +51,5 @@ type work struct {
 	ctx      context.Context
 	id       flowID
 	from     xg.Node
-	callback chan map[xg.Node]Awaitable
+	callback chan<- gather
 }

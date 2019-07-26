@@ -59,18 +59,18 @@ func TestOrderFutures(t *testing.T) {
 	})
 
 	gs := gather{n1: a1, n2: a2, n3: a3, n4: a4}
-	f, err := gs.futuresForNodes(ctx, xg.EdgeSlice{}.FromNodes)
+	_, f, err := gs.futuresForNodes(ctx, xg.EdgeSlice{}.FromNodes)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(f))
 
-	f, err = gs.futuresForNodes(ctx,
+	_, f, err = gs.futuresForNodes(ctx,
 		func() xg.NodeSlice {
 			return xg.NodeSlice{n1, n2}
 		})
 	require.NoError(t, err)
 	require.Equal(t, []Future{a1, a2}, f)
 
-	f, err = gs.futuresForNodes(ctx,
+	_, f, err = gs.futuresForNodes(ctx,
 		func() xg.NodeSlice {
 			return xg.NodeSlice{n1, &nodeT{id: "?"}}
 		})

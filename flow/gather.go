@@ -22,9 +22,11 @@ func (m gather) hasKeys(gen func() xg.NodeSlice) bool {
 	return matches == len(test)
 }
 
-func (m gather) futuresForNodes(ctx context.Context, gen func() xg.NodeSlice) (futures []Future, err error) {
+func (m gather) futuresForNodes(ctx context.Context,
+	gen func() xg.NodeSlice) (ordered xg.NodeSlice, futures []Future, err error) {
+
 	futures = []Future{}
-	ordered := gen()
+	ordered = gen()
 	for i := range ordered {
 		if future := m[ordered[i]]; future == nil {
 			err = fmt.Errorf("%v : Missing future for %v", flowIDFrom(ctx), ordered[i])
