@@ -3,11 +3,12 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 import (
 	"context"
 	"sort"
+	"sync"
 	"testing"
-	//	"time"
 
 	xg "github.com/orkestr8/xgraph"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 )
 
 type intNode int64
@@ -161,4 +162,112 @@ func TestNodeScatter(t *testing.T) {
 	}
 
 	n.Close()
+}
+
+func TestNodeApply(t *testing.T) {
+
+	c := 10
+	args := []interface{}{1, 2}
+
+	n := &node{
+		sem: semaphore.NewWeighted(2),
+		then: func(args []interface{}) (interface{}, error) {
+			// compute the sum
+			return args[0].(int) + args[1].(int), nil
+		},
+	}
+
+	start := make(chan interface{})
+
+	results := map[int]chan int{}
+	keys := make([]int, c)
+	for i := 0; i < c; i++ {
+		keys[i] = i
+		results[i] = make(chan int, 1)
+	}
+
+	ctx := context.Background()
+
+	wg := sync.WaitGroup{}
+	for i := range results {
+		wg.Add(1)
+		go func(i int) {
+			<-start
+			v, err := n.apply(ctx, args)
+			require.NoError(t, err)
+			vv, _ := n.then(args)
+			require.Equal(t, vv, v.(int))
+			results[i] <- i // send the id to verify execution
+			wg.Done()
+		}(i)
+	}
+
+	close(start)
+
+	wg.Wait()
+
+	for i := range keys {
+		require.NotNil(t, results[i])
+		if <-results[i] == i {
+			close(results[i])
+			delete(results, i)
+		}
+	}
+
+	require.Equal(t, 0, len(results))
+}
+
+func TestNodeApplyCancel(t *testing.T) {
+
+	c := 10
+	args := []interface{}{1, 2}
+
+	n := &node{
+		sem: semaphore.NewWeighted(0),
+		then: func(args []interface{}) (interface{}, error) {
+			// compute the sum
+			return args[0].(int) + args[1].(int), nil
+		},
+	}
+
+	start := make(chan interface{})
+
+	results := map[int]chan int{}
+	keys := make([]int, c)
+	for i := 0; i < c; i++ {
+		keys[i] = i
+		results[i] = make(chan int, 1)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	wg := sync.WaitGroup{}
+	for i := range results {
+		wg.Add(1)
+		go func(i int) {
+			<-start
+
+			_, err := n.apply(ctx, args)
+			require.Error(t, err)
+			results[i] <- i // send the id to verify execution
+
+			wg.Done()
+		}(i)
+	}
+
+	close(start)
+
+	cancel()
+
+	wg.Wait()
+
+	for i := range keys {
+		require.NotNil(t, results[i])
+		if <-results[i] == i {
+			close(results[i])
+			delete(results, i)
+		}
+	}
+
+	require.Equal(t, 0, len(results))
 }

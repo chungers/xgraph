@@ -2,10 +2,10 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 
 import (
 	xg "github.com/orkestr8/xgraph"
+	"golang.org/x/sync/semaphore"
 )
 
-func analyze(g xg.Graph, kind xg.EdgeKind,
-	ordered xg.NodeSlice,
+func analyze(g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice,
 	options Options) (*graph, error) {
 
 	nodes := []*node{}
@@ -67,6 +67,10 @@ func analyze(g xg.Graph, kind xg.EdgeKind,
 				return nil, err
 			}
 			node.attributes = attr
+		}
+
+		if node.attributes.MaxWorkers > 0 {
+			node.sem = semaphore.NewWeighted(int64(node.attributes.MaxWorkers))
 		}
 		nodes = append(nodes, node)
 
