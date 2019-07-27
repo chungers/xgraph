@@ -2,6 +2,7 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"testing"
@@ -166,7 +167,7 @@ func TestNodeScatter(t *testing.T) {
 
 func TestNodeApply(t *testing.T) {
 
-	c := 10
+	c := 1000
 	args := []interface{}{1, 2}
 
 	n := &node{
@@ -219,7 +220,7 @@ func TestNodeApply(t *testing.T) {
 
 func TestNodeApplyCancel(t *testing.T) {
 
-	c := 10
+	c := 1000
 	args := []interface{}{1, 2}
 
 	n := &node{
@@ -258,6 +259,78 @@ func TestNodeApplyCancel(t *testing.T) {
 	close(start)
 
 	cancel()
+
+	wg.Wait()
+
+	for i := range keys {
+		require.NotNil(t, results[i])
+		if <-results[i] == i {
+			close(results[i])
+			delete(results, i)
+		}
+	}
+
+	require.Equal(t, 0, len(results))
+}
+
+func TestNodeApplyAsync(t *testing.T) {
+
+	c := 100
+
+	inputs := 100
+
+	ctx := context.Background()
+	g := map[xg.Node]Awaitable{}
+	for i := 0; i < inputs; i++ {
+		g[&nodeT{id: fmt.Sprintf("%v", i)}] = Async(ctx, func() (interface{}, error) { return 1, nil })
+	}
+
+	n := &node{
+		sem: semaphore.NewWeighted(1),
+		inputFrom: func() xg.NodeSlice {
+			s := xg.NodeSlice{}
+			for k := range g {
+				s = append(s, k)
+			}
+			return s
+		},
+		then: func(args []interface{}) (interface{}, error) {
+			// compute the sum
+			sum := 0
+			for i := range args {
+				sum += args[i].(int)
+			}
+			return sum, nil
+		},
+	}
+
+	start := make(chan interface{})
+
+	results := map[int]chan int{}
+	keys := make([]int, c)
+	for i := 0; i < c; i++ {
+		keys[i] = i
+		results[i] = make(chan int, 1)
+	}
+
+	wg := sync.WaitGroup{}
+	for i := range results {
+		wg.Add(1)
+		go func(i int) {
+
+			<-start
+
+			future := n.applyAsync(ctx, g)
+
+			require.NoError(t, future.Error())
+			require.Equal(t, inputs, future.Value()) // just a sum of 1 * input times
+			results[i] <- i                          // send the id to verify execution
+
+			wg.Done()
+		}(i)
+	}
+
+	close(start)
 
 	wg.Wait()
 
