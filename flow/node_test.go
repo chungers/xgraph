@@ -275,9 +275,9 @@ func TestNodeApplyCancel(t *testing.T) {
 
 func TestNodeApplyAsync(t *testing.T) {
 
-	c := 100
+	c := 20
 
-	inputs := 100
+	inputs := 1000
 
 	ctx := context.Background()
 	g := map[xg.Node]Awaitable{}
@@ -323,8 +323,8 @@ func TestNodeApplyAsync(t *testing.T) {
 			future := n.applyAsync(ctx, g)
 
 			require.NoError(t, future.Error())
-			require.Equal(t, inputs, future.Value()) // just a sum of 1 * input times
-			results[i] <- i                          // send the id to verify execution
+			require.Equal(t, 1*inputs, future.Value()) // just a sum of 1 * input times
+			results[i] <- i                            // send the id to verify execution
 
 			wg.Done()
 		}(i)

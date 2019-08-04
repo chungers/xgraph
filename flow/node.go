@@ -34,6 +34,7 @@ type then xg.OperatorFunc
 type attributes struct {
 	Timeout    Duration `json:"timeout,omitempty"`
 	MaxWorkers int      `json:"max_workers,omitempty"`
+	EdgeSorter string   `json:"edge_sorter,omitempty"`
 }
 
 // sets default values for the receiver

@@ -7,6 +7,12 @@ import (
 	xg "github.com/orkestr8/xgraph"
 )
 
+type GraphRef string
+
+func (ref GraphRef) NodeKey() xg.NodeKey {
+	return xg.NodeKey(ref)
+}
+
 type Duration time.Duration
 
 type Logger interface {
@@ -30,16 +36,6 @@ type FlowGraph struct {
 	input      map[xg.Node]chan<- work
 	output     map[xg.Node]chan work
 	aggregator chan work
-}
-
-// graph is the executable representation.
-// analyze() generates this struct. In this struct, all the channels are
-// allocated and goroutines are ready to be started.
-type graph struct {
-	links   links
-	input   xg.NodeSlice
-	output  xg.NodeSlice
-	ordered []*node
 }
 
 type flowID int64
