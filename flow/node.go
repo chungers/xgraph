@@ -8,6 +8,7 @@ import (
 	"time"
 
 	xg "github.com/orkestr8/xgraph"
+	"golang.org/x/sync/semaphore"
 )
 
 type node struct {
@@ -24,13 +25,16 @@ type node struct {
 	outbound []chan<- work
 	stop     chan interface{}
 
+	sem   *semaphore.Weighted
 	tasks *stopper
 }
 
 type then xg.OperatorFunc
 
 type attributes struct {
-	Timeout Duration `json:"timeout,omitempty"`
+	Timeout    Duration `json:"timeout,omitempty"`
+	MaxWorkers int      `json:"max_workers,omitempty"`
+	EdgeSorter string   `json:"edge_sorter,omitempty"`
 }
 
 // sets default values for the receiver
@@ -49,11 +53,6 @@ func (node *node) defaults() *node {
 	}
 	if node.stop == nil {
 		node.stop = make(chan interface{})
-	}
-	if node.then == nil {
-		node.then = func([]interface{}) (interface{}, error) {
-			return nil, nil
-		}
 	}
 	if node.tasks == nil {
 		node.tasks = &stopper{}
@@ -198,33 +197,71 @@ loop:
 			}
 
 			node.Log("All input received", "id", w.id, "input", gathered, "given", node.inputFrom())
+			// remove from pending list
+			delete(pending, w.id)
 
-			// Build Future here
+			if w.callback != nil && len(node.outbound) > 0 {
+				// Send the gathered futures to callback without blocking
+				select {
+				case w.callback <- gathered:
+				default:
+				}
+				continue loop
+			}
+
+			// Build Future to pass on to the next stages
 			ctx := w.ctx
 			if node.attributes.Timeout > 0 {
 				ctx, _ = context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
 			}
-			future := Async(ctx, func() (interface{}, error) {
 
-				futures, err := gathered.futuresForNodes(ctx, node.inputFrom)
-				if err != nil {
-					return nil, err
-				}
-				args, err := waitFor(ctx, futures)
-				if err != nil {
-					return nil, err
-				}
-
-				// TODO - also pass in ctx?
-				// TODO - use sync.Semaphore to set max concurrent then()?
-				return node.then(args)
-			})
+			future := node.applyAsync(ctx, gathered)
 
 			// Scatter / dispatch work
 			node.dispatch(work{ctx: w.ctx, id: w.id, from: node.Node, Awaitable: future, callback: w.callback})
-
-			// remove from pending list
-			delete(pending, w.id)
 		}
 	}
+}
+
+func (node *node) applyAsync(ctx context.Context, m gather) Awaitable {
+
+	return Async(ctx, func() (interface{}, error) {
+
+		keys, futures, err := m.futuresForNodes(ctx, node.inputFrom)
+		if err != nil {
+			return nil, err
+		}
+
+		// futures and inputFrom are 1:1, so args and inputFrom are 1:1
+		args, err := waitFor(ctx, futures)
+		if err != nil {
+			return nil, err
+		}
+
+		if node.then == nil {
+			// If no operator, simply return a map of all the values by Node.
+			// This is used for a special collection node for the entire graph.
+			m := map[xg.Node]interface{}{}
+			for i := range keys {
+				m[keys[i]] = args[i]
+			}
+			return m, nil
+		}
+
+		// Do work rather than collect the data.
+		return node.apply(ctx, args)
+	})
+}
+
+func (node *node) apply(ctx context.Context, args []interface{}) (interface{}, error) {
+	// Using semaphore. This allows us to do throttling or limit
+	// the number of parallel workers.
+	if node.sem != nil {
+		err := node.sem.Acquire(ctx, 1)
+		if err != nil {
+			return nil, err
+		}
+		defer node.sem.Release(1)
+	}
+	return node.then(args)
 }

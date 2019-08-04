@@ -2,12 +2,14 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"sync"
 	"testing"
-	//	"time"
 
 	xg "github.com/orkestr8/xgraph"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 )
 
 type intNode int64
@@ -161,4 +163,184 @@ func TestNodeScatter(t *testing.T) {
 	}
 
 	n.Close()
+}
+
+func TestNodeApply(t *testing.T) {
+
+	c := 1000
+	args := []interface{}{1, 2}
+
+	n := &node{
+		sem: semaphore.NewWeighted(2),
+		then: func(args []interface{}) (interface{}, error) {
+			// compute the sum
+			return args[0].(int) + args[1].(int), nil
+		},
+	}
+
+	start := make(chan interface{})
+
+	results := map[int]chan int{}
+	keys := make([]int, c)
+	for i := 0; i < c; i++ {
+		keys[i] = i
+		results[i] = make(chan int, 1)
+	}
+
+	ctx := context.Background()
+
+	wg := sync.WaitGroup{}
+	for i := range results {
+		wg.Add(1)
+		go func(i int) {
+			<-start
+			v, err := n.apply(ctx, args)
+			require.NoError(t, err)
+			vv, _ := n.then(args)
+			require.Equal(t, vv, v.(int))
+			results[i] <- i // send the id to verify execution
+			wg.Done()
+		}(i)
+	}
+
+	close(start)
+
+	wg.Wait()
+
+	for i := range keys {
+		require.NotNil(t, results[i])
+		if <-results[i] == i {
+			close(results[i])
+			delete(results, i)
+		}
+	}
+
+	require.Equal(t, 0, len(results))
+}
+
+func TestNodeApplyCancel(t *testing.T) {
+
+	c := 1000
+	args := []interface{}{1, 2}
+
+	n := &node{
+		sem: semaphore.NewWeighted(0),
+		then: func(args []interface{}) (interface{}, error) {
+			// compute the sum
+			return args[0].(int) + args[1].(int), nil
+		},
+	}
+
+	start := make(chan interface{})
+
+	results := map[int]chan int{}
+	keys := make([]int, c)
+	for i := 0; i < c; i++ {
+		keys[i] = i
+		results[i] = make(chan int, 1)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	wg := sync.WaitGroup{}
+	for i := range results {
+		wg.Add(1)
+		go func(i int) {
+			<-start
+
+			_, err := n.apply(ctx, args)
+			require.Error(t, err)
+			results[i] <- i // send the id to verify execution
+
+			wg.Done()
+		}(i)
+	}
+
+	close(start)
+
+	cancel()
+
+	wg.Wait()
+
+	for i := range keys {
+		require.NotNil(t, results[i])
+		if <-results[i] == i {
+			close(results[i])
+			delete(results, i)
+		}
+	}
+
+	require.Equal(t, 0, len(results))
+}
+
+func TestNodeApplyAsync(t *testing.T) {
+
+	c := 20
+
+	inputs := 1000
+
+	ctx := context.Background()
+	g := map[xg.Node]Awaitable{}
+	for i := 0; i < inputs; i++ {
+		g[&nodeT{id: fmt.Sprintf("%v", i)}] = Async(ctx, func() (interface{}, error) { return 1, nil })
+	}
+
+	n := &node{
+		sem: semaphore.NewWeighted(1),
+		inputFrom: func() xg.NodeSlice {
+			s := xg.NodeSlice{}
+			for k := range g {
+				s = append(s, k)
+			}
+			return s
+		},
+		then: func(args []interface{}) (interface{}, error) {
+			// compute the sum
+			sum := 0
+			for i := range args {
+				sum += args[i].(int)
+			}
+			return sum, nil
+		},
+	}
+
+	start := make(chan interface{})
+
+	results := map[int]chan int{}
+	keys := make([]int, c)
+	for i := 0; i < c; i++ {
+		keys[i] = i
+		results[i] = make(chan int, 1)
+	}
+
+	wg := sync.WaitGroup{}
+	for i := range results {
+		wg.Add(1)
+		go func(i int) {
+
+			<-start
+
+			future := n.applyAsync(ctx, g)
+
+			require.NoError(t, future.Error())
+			require.Equal(t, 1*inputs, future.Value()) // just a sum of 1 * input times
+			results[i] <- i                            // send the id to verify execution
+
+			wg.Done()
+		}(i)
+	}
+
+	close(start)
+
+	wg.Wait()
+
+	for i := range keys {
+		require.NotNil(t, results[i])
+		if <-results[i] == i {
+			close(results[i])
+			delete(results, i)
+		}
+	}
+
+	require.Equal(t, 0, len(results))
 }
