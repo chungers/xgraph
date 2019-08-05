@@ -39,12 +39,13 @@ func (n *nodeT) Attributes() map[string]interface{} {
 
 func TestNodeStartStop(t *testing.T) {
 	n := &node{
-		Node: &nodeT{id: "1"},
+		Logger: logger(1),
+		Node:   &nodeT{id: "1"},
 	}
 
 	n.defaults()
 	t.Log("starting")
-	go n.run()
+	n.run()
 
 	t.Log("closing")
 	n.Close() // this will cause the collection loop to end
@@ -76,7 +77,11 @@ func TestNodeGather(t *testing.T) {
 	sent := make(chan []int)
 	collected := make(chan []int)
 
-	go n.gather()
+	ready := make(chan interface{})
+
+	go n.gather(ready)
+
+	<-ready
 
 	// dispatch work
 	go func() {
@@ -85,7 +90,7 @@ func TestNodeGather(t *testing.T) {
 		for i := range messages {
 			s := i % len(inbound)
 			inbound[s] <- messages[i]
-			out = append(out, int(messages[i].id))
+			out = append(out, messages[i].id.(int))
 		}
 		sent <- out
 		close(sent)
@@ -99,7 +104,7 @@ func TestNodeGather(t *testing.T) {
 			if !ok {
 				break
 			}
-			m = append(m, int(w.id))
+			m = append(m, w.id.(int))
 		}
 		collected <- m
 		close(collected)
@@ -140,8 +145,9 @@ func TestNodeScatter(t *testing.T) {
 
 	n.defaults()
 
-	go n.scatter()
-
+	ready := make(chan interface{})
+	go n.scatter(ready)
+	<-ready
 	ctx := context.Background()
 	a1 := Async(ctx, func() (interface{}, error) { return 100, nil })
 	a2 := Async(ctx, func() (interface{}, error) { return 200, nil })
@@ -275,9 +281,9 @@ func TestNodeApplyCancel(t *testing.T) {
 
 func TestNodeApplyAsync(t *testing.T) {
 
-	c := 20
+	c := 5
 
-	inputs := 1000
+	inputs := 100
 
 	ctx := context.Background()
 	g := map[xg.Node]Awaitable{}

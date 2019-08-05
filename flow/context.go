@@ -6,11 +6,14 @@ import (
 
 type contextKeyType int
 
+var (
+	nullFlowID = flowID(nil)
+)
+
 const (
 	flowIDContextKey contextKeyType = iota
 	operatorContextKey
 
-	nullFlowID       = flowID(-1)
 	nullFlowOperator = "__null__"
 )
 

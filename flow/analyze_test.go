@@ -21,6 +21,15 @@ func TestAnalyze1(t *testing.T) {
 	g, err := analyze(ref, gg, deps, ordered, options)
 	require.NoError(t, err)
 	require.NotNil(t, g)
+
+	require.NotNil(t, g.Node)
+	require.Equal(t, len(ordered)+1, len(g.ordered))
+	require.Equal(t, 1, len(g.output))
+	require.Equal(t, 5, len(g.input))
+
+	g.run()
+
+	require.NoError(t, g.Close())
 }
 
 func TestAnalyzePairs(t *testing.T) {

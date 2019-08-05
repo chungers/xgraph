@@ -25,8 +25,7 @@ type node struct {
 	outbound []chan<- work
 	stop     chan interface{}
 
-	sem   *semaphore.Weighted
-	tasks *stopper
+	sem *semaphore.Weighted
 }
 
 type then xg.OperatorFunc
@@ -54,9 +53,6 @@ func (node *node) defaults() *node {
 	if node.stop == nil {
 		node.stop = make(chan interface{})
 	}
-	if node.tasks == nil {
-		node.tasks = &stopper{}
-	}
 	return node
 }
 
@@ -71,11 +67,15 @@ func (node *node) run() {
 	if node.stop == nil {
 		panic(fmt.Errorf("node.stop == nil. run() is not idempotent."))
 	}
-	go node.gather()
-	go node.scatter()
 
-	node.tasks.waitUntil(taskGather, taskScatter)
-	node.Log("Started")
+	gC := make(chan interface{})
+	sC := make(chan interface{})
+	go node.gather(gC)
+	go node.scatter(sC)
+	node.Log("WaitForAll", "node", node.Node)
+	<-gC
+	<-sC
+	node.Log("Started", "node", node.Node)
 	return
 }
 
@@ -84,8 +84,6 @@ func (node *node) Close() (err error) {
 		e := recover()
 		if e, is := e.(error); is {
 			err = e
-		} else {
-			err = fmt.Errorf("Error closing node %v: %v", node.Node, e)
 		}
 		return
 	}()
@@ -94,19 +92,12 @@ func (node *node) Close() (err error) {
 	}
 	close(node.stop)
 
-	node.tasks.waitUntilDone(taskGather, taskScatter)
 	return
 }
 
-const (
-	taskGather = iota
-	taskScatter
-)
-
-func (node *node) gather() {
+func (node *node) gather(ready chan interface{}) {
 	defer func() {
 		close(node.collect) // when gather completes, the other loop receiving from collect stops
-		node.tasks.done(taskGather)
 	}()
 
 	if node.stop == nil {
@@ -126,8 +117,8 @@ func (node *node) gather() {
 		})
 	}
 
-	node.tasks.add(taskGather, node.stop)
-	node.Log("node.scatter", "node", node.Node)
+	close(ready)
+	node.Log("node.gather", "node", node.Node)
 
 	open := len(node.inbound) // track number of closed channels.  When all are closed, exit.
 loop:
@@ -153,74 +144,65 @@ loop:
 	}
 }
 
-func (node *node) scatter() {
-	defer node.tasks.done(taskScatter)
-
+func (node *node) scatter(ready chan interface{}) {
 	pending := map[flowID]gather{}
 
-	cancel := make(chan interface{})
-	node.tasks.add(taskScatter, cancel)
+	close(ready)
 
 	node.Log("node.scatter", "node", node.Node)
 
-loop:
 	for {
-		select {
-
-		case <-cancel:
+		w, ok := <-node.collect
+		if !ok {
 			node.Log("Exiting scatter", "node", node.Node)
 			return
-
-		case w, ok := <-node.collect:
-			if !ok {
-				return
-			}
-
-			node.Log("Got work", "id", w.id, "work", w)
-
-			// match messages by flow id.
-			gathered, has := pending[w.id]
-			if !has {
-				gathered = gather{}
-				pending[w.id] = gathered
-			}
-			if prev, has := gathered[w.from]; has {
-				// Warning that old value will be replaced by duplicate/new
-				w.Warn("Duplicate awaitable", "id", w.id,
-					"from", w.from, "old", prev, "new", w)
-			}
-			gathered[w.from] = w
-
-			if len(node.inputFrom()) > 0 && !gathered.hasKeys(node.inputFrom) {
-				// Nothing to do... just wait for message to come
-				continue loop
-			}
-
-			node.Log("All input received", "id", w.id, "input", gathered, "given", node.inputFrom())
-			// remove from pending list
-			delete(pending, w.id)
-
-			if w.callback != nil && len(node.outbound) > 0 {
-				// Send the gathered futures to callback without blocking
-				select {
-				case w.callback <- gathered:
-				default:
-				}
-				continue loop
-			}
-
-			// Build Future to pass on to the next stages
-			ctx := w.ctx
-			if node.attributes.Timeout > 0 {
-				ctx, _ = context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
-			}
-
-			future := node.applyAsync(ctx, gathered)
-
-			// Scatter / dispatch work
-			node.dispatch(work{ctx: w.ctx, id: w.id, from: node.Node, Awaitable: future, callback: w.callback})
 		}
+
+		node.Log("Got work", "id", w.id, "work", w)
+
+		// match messages by flow id.
+		gathered, has := pending[w.id]
+		if !has {
+			gathered = gather{}
+			pending[w.id] = gathered
+		}
+		if prev, has := gathered[w.from]; has {
+			// Warning that old value will be replaced by duplicate/new
+			w.Warn("Duplicate awaitable", "id", w.id,
+				"from", w.from, "old", prev, "new", w)
+		}
+		gathered[w.from] = w
+
+		if len(node.inputFrom()) > 0 && !gathered.hasKeys(node.inputFrom) {
+			// Nothing to do... just wait for message to come
+			continue
+		}
+
+		node.Log("All input received", "id", w.id, "input", gathered, "given", node.inputFrom())
+		// remove from pending list
+		delete(pending, w.id)
+
+		if w.callback != nil && len(node.outbound) > 0 {
+			// Send the gathered futures to callback without blocking
+			select {
+			case w.callback <- gathered:
+			default:
+			}
+			continue
+		}
+
+		// Build Future to pass on to the next stages
+		ctx := w.ctx
+		if node.attributes.Timeout > 0 {
+			ctx, _ = context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
+		}
+
+		future := node.applyAsync(ctx, gathered)
+
+		// Scatter / dispatch work
+		node.dispatch(work{ctx: w.ctx, id: w.id, from: node.Node, Awaitable: future, callback: w.callback})
 	}
+
 }
 
 func (node *node) applyAsync(ctx context.Context, m gather) Awaitable {
