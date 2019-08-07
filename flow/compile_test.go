@@ -41,8 +41,7 @@ func testBuildGraph(input xg.EdgeKind) xg.Graph {
 
 	print := func(nodeKey interface{}) xg.OperatorFunc {
 		return func(args []interface{}) (interface{}, error) {
-			return fmt.Sprintf("%v(%v)", nodeKey,
-				args), nil
+			return fmt.Sprintf("%v(%v)", nodeKey, args), nil
 		}
 	}
 

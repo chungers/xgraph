@@ -27,9 +27,18 @@ func TestAnalyze1(t *testing.T) {
 	require.Equal(t, 1, len(g.output))
 	require.Equal(t, 5, len(g.input))
 
-	g.run()
+	require.Equal(t, xg.NodeSlice{
+		gg.Node(xg.NodeKey("x1")),
+		gg.Node(xg.NodeKey("x2")),
+		gg.Node(xg.NodeKey("x3")),
+		gg.Node(xg.NodeKey("y1")),
+		gg.Node(xg.NodeKey("y2")),
+	}, g.inputNodes())
 
-	require.NoError(t, g.Close())
+	require.Equal(t, xg.NodeSlice{
+		gg.Node(xg.NodeKey("ratio")),
+	}, g.outputNodes())
+
 }
 
 func TestAnalyzePairs(t *testing.T) {

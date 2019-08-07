@@ -25,7 +25,8 @@ type node struct {
 	outbound []chan<- work
 	stop     chan interface{}
 
-	sem *semaphore.Weighted
+	terminal bool
+	sem      *semaphore.Weighted
 }
 
 type then xg.OperatorFunc
@@ -72,7 +73,6 @@ func (node *node) run() {
 	sC := make(chan interface{})
 	go node.gather(gC)
 	go node.scatter(sC)
-	node.Log("WaitForAll", "node", node.Node)
 	<-gC
 	<-sC
 	node.Log("Started", "node", node.Node)
@@ -127,18 +127,18 @@ loop:
 		if !ok {
 			open--
 			if open == 0 || index == 0 { // all closed or if stop is closed
-				node.Log("Exit gather", "node", node)
+				node.Log("exit node.gather", "node", node)
 				return
 			}
 			cases[index].Chan = reflect.ValueOf(nil)
 			continue loop
 		}
 		if value.Interface() == nil {
-			panic(fmt.Errorf("Assert: value.Interface() cannot be nil."))
+			panic(fmt.Errorf("assert: value.Interface() cannot be nil."))
 		}
 		work, is := value.Interface().(work)
 		if !is {
-			panic(fmt.Errorf("Assert: value.Interface() must be instance of work: %v", value))
+			panic(fmt.Errorf("assert: value.Interface() must be instance of work: %v", value))
 		}
 		node.collect <- work
 	}
@@ -158,14 +158,13 @@ func (node *node) scatter(ready chan interface{}) {
 			return
 		}
 
-		node.Log("Got work", "id", w.id, "work", w)
-
 		// match messages by flow id.
 		gathered, has := pending[w.id]
 		if !has {
 			gathered = gather{}
 			pending[w.id] = gathered
 		}
+
 		if prev, has := gathered[w.from]; has {
 			// Warning that old value will be replaced by duplicate/new
 			w.Warn("Duplicate awaitable", "id", w.id,
@@ -178,11 +177,12 @@ func (node *node) scatter(ready chan interface{}) {
 			continue
 		}
 
-		node.Log("All input received", "id", w.id, "input", gathered, "given", node.inputFrom())
+		node.Log("All input received", "node", node.Node, "id", w.id, "input", gathered)
+
 		// remove from pending list
 		delete(pending, w.id)
 
-		if w.callback != nil && len(node.outbound) > 0 {
+		if w.callback != nil && node.terminal {
 			// Send the gathered futures to callback without blocking
 			select {
 			case w.callback <- gathered:
@@ -197,7 +197,15 @@ func (node *node) scatter(ready chan interface{}) {
 			ctx, _ = context.WithTimeout(w.ctx, time.Duration(node.attributes.Timeout))
 		}
 
-		future := node.applyAsync(ctx, gathered)
+		// Test for the case where this is the graph input node and the gathered input is
+		// data for itself.  This is for the case when a graph's input node is wired to
+		// have the collect channel receiving work from outside the graph.  See graph.exec().
+		var future Awaitable
+		if len(gathered) == 1 && gathered[node.Node] != nil {
+			future = gathered[node.Node] // just use the future given in the work message
+		} else {
+			future = node.applyAsync(ctx, gathered) // inputs from other nodes and not itself
+		}
 
 		// Scatter / dispatch work
 		node.dispatch(work{ctx: w.ctx, id: w.id, from: node.Node, Awaitable: future, callback: w.callback})

@@ -2,6 +2,7 @@ package xgraph // import "github.com/orkestr8/xgraph"
 
 import (
 	"fmt"
+	"sort"
 )
 
 type node struct {
@@ -37,4 +38,28 @@ func (nodes Nodes) Slice() NodeSlice {
 		all = append(all, n)
 	}
 	return all
+}
+
+func SortNodes(nodes []Node, less func(Node, Node) bool) {
+	sort.Sort(&nodeSorter{slice: nodes, less: less})
+}
+
+type nodeSorter struct {
+	slice []Node
+	less  func(a, b Node) bool
+}
+
+// Len is part of sort.Interface.
+func (es *nodeSorter) Len() int {
+	return len(es.slice)
+}
+
+// Swap is part of sort.Interface.
+func (es *nodeSorter) Swap(i, j int) {
+	es.slice[i], es.slice[j] = es.slice[j], es.slice[i]
+}
+
+// Less is part of sort.Interface. It is implemented by calling the "by" closure in the sorter.
+func (es *nodeSorter) Less(i, j int) bool {
+	return es.less(es.slice[i], es.slice[j])
 }
