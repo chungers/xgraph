@@ -38,7 +38,7 @@ type FlowGraph struct {
 	aggregator chan work
 }
 
-type flowID int64
+type flowID interface{}
 
 type work struct {
 	Awaitable

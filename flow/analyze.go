@@ -76,6 +76,8 @@ func analyze(ref GraphRef, g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice,
 		// TODO(dchung) - Check to see if this node is a reference to another graph.
 		// if so, we can wire the input/output directly instead of creating a node instance.
 
+		options.Log("Building node", "node", this, "inputChans", inbound, "outputChans", outbound,
+			"inputEdges", to, "outputEdges", from)
 		node := &node{
 			Node:       this,
 			Logger:     options.Logger,
@@ -121,6 +123,7 @@ func analyze(ref GraphRef, g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice,
 	// Use a node implementation to collect all the futures from output nodes
 	gOutput, gOutputChs := pairs(graphOutput)
 	agg := (&node{
+		terminal:  true,
 		Node:      ref,
 		Logger:    options.Logger,
 		collect:   make(chan work),
