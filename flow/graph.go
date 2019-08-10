@@ -55,7 +55,7 @@ func (g *graph) Close() (err error) {
 	return nil
 }
 
-func (g *graph) matchInputs(args map[xg.Node]interface{}) bool {
+func (g *graph) checkAllInputs(args map[xg.Node]Awaitable) bool {
 	test := xg.NodeSlice{}
 	for k := range args {
 		test = append(test, k)
@@ -73,37 +73,44 @@ func (g *graph) matchInputs(args map[xg.Node]interface{}) bool {
 	return true
 }
 
-func (g *graph) exec(ctx context.Context, args map[xg.Node]interface{}) (<-chan gather, error) {
-
-	if !g.matchInputs(args) {
-		return nil, fmt.Errorf("incomplete input")
-	}
-
-	callback := make(chan gather)
+func (g *graph) execFutures(ctx context.Context, args map[xg.Node]Awaitable) (context.Context, <-chan gather, error) {
 
 	id := flowIDFrom(ctx)
 	if id == nil {
 		id = flowID(time.Now().UnixNano())
+		ctx = setFlowID(ctx, id) // set the id in the context if not already set
+	}
+
+	callback := gatherChanFrom(ctx)
+	if callback == nil {
+		callback = make(chan gather)
+		ctx = setGatherChan(ctx, callback)
 	}
 
 	loggerFrom(ctx).Log("Start flow run", "id", id, "args", args)
 
-	for k, v := range args {
+	for k, awaitable := range args {
 		if ch, has := g.input[k]; has {
 			source := k
-			arg := v
 			ch <- work{
-				ctx:      ctx,
-				id:       id,
-				from:     source,
-				callback: callback,
-				Awaitable: Async(ctx, func() (interface{}, error) {
-					return arg, nil
-				}),
+				ctx:       ctx,
+				id:        id,
+				from:      source,
+				callback:  callback,
+				Awaitable: awaitable,
 			}
 		} else {
-			return nil, fmt.Errorf("not an input node %v", k)
+			return ctx, nil, fmt.Errorf("not an input node %v", k)
 		}
 	}
-	return callback, nil
+	return ctx, callback, nil
+}
+
+func (g *graph) exec(ctx context.Context, args map[xg.Node]interface{}) (context.Context, <-chan gather, error) {
+	awaitables := map[xg.Node]Awaitable{}
+	for k, v := range args {
+		node := k
+		awaitables[node] = Const(v)
+	}
+	return g.execFutures(ctx, awaitables)
 }

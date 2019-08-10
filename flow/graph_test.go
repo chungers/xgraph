@@ -3,6 +3,7 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 import (
 	"context"
 	"testing"
+	"time"
 
 	xg "github.com/orkestr8/xgraph"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,7 @@ func TestGraphExec(t *testing.T) {
 	y2 := gg.Node(xg.NodeKey("y2"))
 	ratio := gg.Node(xg.NodeKey("ratio"))
 
-	result, err := g.exec(context.Background(),
+	ctx, result, err := g.exec(context.Background(),
 		map[xg.Node]interface{}{
 			x1: "X1",
 			x2: "X2",
@@ -50,11 +51,45 @@ func TestGraphExec(t *testing.T) {
 			y2: "Y2",
 		})
 	require.NoError(t, err)
+	require.NotNil(t, gatherChanFrom(ctx))
+	require.NotNil(t, flowIDFrom(ctx))
 
 	m := map[xg.Node]Awaitable(<-result)
 	require.NotNil(t, m[ratio])
 
 	t.Log(m[ratio].Value())
 
+	require.NoError(t, g.Close())
+}
+
+func TODO_TestGraphExecPartial(t *testing.T) {
+	g, gg, _ := testAnalyzeGraph(t)
+	g.run()
+
+	x1 := gg.Node(xg.NodeKey("x1"))
+	x2 := gg.Node(xg.NodeKey("x2"))
+	x3 := gg.Node(xg.NodeKey("x3"))
+	ratio := gg.Node(xg.NodeKey("ratio"))
+
+	// partial inputs.
+	X := map[xg.Node]interface{}{
+		x1: "X1",
+		x2: "X2",
+		x3: "X3",
+	}
+
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, result, err := g.exec(ctx, X)
+	require.NoError(t, err)
+
+	select {
+
+	case <-time.After(2 * time.Second):
+		t.Fail()
+
+	case m := <-result:
+		// result should timeout
+		require.Error(t, map[xg.Node]Awaitable(m)[ratio].Error())
+	}
 	require.NoError(t, g.Close())
 }
