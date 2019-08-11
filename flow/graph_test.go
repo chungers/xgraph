@@ -56,13 +56,14 @@ func TestGraphExec(t *testing.T) {
 
 	m := map[xg.Node]Awaitable(<-result)
 	require.NotNil(t, m[ratio])
+	require.Equal(t, 1, len(m))
 
-	t.Log(m[ratio].Value())
+	require.Equal(t, "ratio([sumX([X1 X2 X3]) sumY([X3 Y2 Y1])])", m[ratio].Value())
 
 	require.NoError(t, g.Close())
 }
 
-func TODO_TestGraphExecPartial(t *testing.T) {
+func TestGraphExecPartialTimeout(t *testing.T) {
 	g, gg, _ := testAnalyzeGraph(t)
 	g.run()
 
@@ -71,7 +72,10 @@ func TODO_TestGraphExecPartial(t *testing.T) {
 	x3 := gg.Node(xg.NodeKey("x3"))
 	ratio := gg.Node(xg.NodeKey("ratio"))
 
-	// partial inputs.
+	// Partial inputs.  Since input is partial,
+	// the futures will block indefinitely until
+	// values are met, unless there is timeout or
+	// cancellation.
 	X := map[xg.Node]interface{}{
 		x1: "X1",
 		x2: "X2",
@@ -91,5 +95,66 @@ func TODO_TestGraphExecPartial(t *testing.T) {
 		// result should timeout
 		require.Error(t, map[xg.Node]Awaitable(m)[ratio].Error())
 	}
+	require.NoError(t, g.Close())
+}
+
+func TestGraphExecPartialLateComplete(t *testing.T) {
+	g, gg, _ := testAnalyzeGraph(t)
+	g.run()
+
+	x1 := gg.Node(xg.NodeKey("x1"))
+	x2 := gg.Node(xg.NodeKey("x2"))
+	x3 := gg.Node(xg.NodeKey("x3"))
+	y1 := gg.Node(xg.NodeKey("y1"))
+	y2 := gg.Node(xg.NodeKey("y2"))
+	ratio := gg.Node(xg.NodeKey("ratio"))
+
+	// Partial inputs.  Since input is partial,
+	// the futures will block indefinitely until
+	// values are met.
+	X := map[xg.Node]interface{}{
+		x1: "X1",
+		x2: "X2",
+		x3: "X3",
+	}
+
+	// No cancelation..  will block indefinitely.
+	ctx := context.Background()
+	ctx, result, err := g.exec(ctx, X)
+	require.NoError(t, err)
+
+	done := make(chan interface{})
+	go func() {
+		defer close(done)
+
+		select {
+
+		case <-time.After(2 * time.Second):
+			t.Fail()
+
+		case m := <-result:
+			// result should timeout
+			require.NoError(t, map[xg.Node]Awaitable(m)[ratio].Error())
+
+			done <- map[xg.Node]Awaitable(m)[ratio].Value()
+		}
+	}()
+
+	// Send in the rest...
+	ctx, _, err = g.exec(ctx, map[xg.Node]interface{}{
+		y1: "Y1",
+	})
+	require.NoError(t, err)
+
+	// Send in the rest...
+	ctx, _, err = g.exec(ctx, map[xg.Node]interface{}{
+		y2: "Y2",
+	})
+	require.NoError(t, err)
+
+	res := <-done
+
+	require.Equal(t, "ratio([sumX([X1 X2 X3]) sumY([X3 Y2 Y1])])", res)
+
 	require.NoError(t, g.Close())
 }

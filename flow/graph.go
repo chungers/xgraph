@@ -55,7 +55,7 @@ func (g *graph) Close() (err error) {
 	return nil
 }
 
-func (g *graph) checkAllInputs(args map[xg.Node]Awaitable) bool {
+func (g *graph) checkComplete(args map[xg.Node]Awaitable) bool {
 	test := xg.NodeSlice{}
 	for k := range args {
 		test = append(test, k)
@@ -102,6 +102,21 @@ func (g *graph) execFutures(ctx context.Context, args map[xg.Node]Awaitable) (co
 		} else {
 			return ctx, nil, fmt.Errorf("not an input node %v", k)
 		}
+	}
+
+	if !g.checkComplete(args) {
+		// if this set of args is incomplete,
+		// set up a watch for timeout
+		go func() {
+			defer tryClose(loggerFrom(ctx), callback)
+
+			<-ctx.Done() // canceled or timedout
+			ret := map[xg.Node]Awaitable{}
+			for _, k := range g.outputNodes() {
+				ret[k] = Const(ctx.Err())
+			}
+			callback <- ret
+		}()
 	}
 	return ctx, callback, nil
 }
