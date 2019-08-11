@@ -121,11 +121,29 @@ func (g *graph) execFutures(ctx context.Context, args map[xg.Node]Awaitable) (co
 	return ctx, callback, nil
 }
 
-func (g *graph) exec(ctx context.Context, args map[xg.Node]interface{}) (context.Context, <-chan gather, error) {
+func (g *graph) execValues(ctx context.Context, args map[xg.Node]interface{}) (context.Context, <-chan gather, error) {
 	awaitables := map[xg.Node]Awaitable{}
 	for k, v := range args {
 		node := k
 		awaitables[node] = Const(v)
 	}
 	return g.execFutures(ctx, awaitables)
+}
+
+func (g *graph) Exec(ctx context.Context, args map[xg.Node]interface{}) (context.Context, Awaitable, error) {
+
+	ctx, ch, err := g.execValues(ctx, args)
+	if err != nil {
+		return ctx, nil, err
+	}
+
+	aw := awaitableFrom(ctx)
+	if aw == nil {
+		aw = Async(ctx, func() (interface{}, error) {
+			return map[xg.Node]Awaitable(<-ch), nil
+		})
+		ctx = setAwaitable(ctx, aw)
+	}
+
+	return ctx, aw, err
 }

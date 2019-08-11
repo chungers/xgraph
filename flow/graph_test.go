@@ -42,7 +42,7 @@ func TestGraphExec(t *testing.T) {
 	y2 := gg.Node(xg.NodeKey("y2"))
 	ratio := gg.Node(xg.NodeKey("ratio"))
 
-	ctx, result, err := g.exec(context.Background(),
+	ctx, result, err := g.execValues(context.Background(),
 		map[xg.Node]interface{}{
 			x1: "X1",
 			x2: "X2",
@@ -83,7 +83,7 @@ func TestGraphExecPartialTimeout(t *testing.T) {
 	}
 
 	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
-	ctx, result, err := g.exec(ctx, X)
+	ctx, result, err := g.execValues(ctx, X)
 	require.NoError(t, err)
 
 	select {
@@ -120,7 +120,7 @@ func TestGraphExecPartialLateComplete(t *testing.T) {
 
 	// No cancelation..  will block indefinitely.
 	ctx := context.Background()
-	ctx, result, err := g.exec(ctx, X)
+	ctx, result, err := g.execValues(ctx, X)
 	require.NoError(t, err)
 
 	done := make(chan interface{})
@@ -141,13 +141,13 @@ func TestGraphExecPartialLateComplete(t *testing.T) {
 	}()
 
 	// Send in the rest...
-	ctx, _, err = g.exec(ctx, map[xg.Node]interface{}{
+	ctx, _, err = g.execValues(ctx, map[xg.Node]interface{}{
 		y1: "Y1",
 	})
 	require.NoError(t, err)
 
 	// Send in the rest...
-	ctx, _, err = g.exec(ctx, map[xg.Node]interface{}{
+	ctx, _, err = g.execValues(ctx, map[xg.Node]interface{}{
 		y2: "Y2",
 	})
 	require.NoError(t, err)
