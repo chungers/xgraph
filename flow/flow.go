@@ -4,7 +4,7 @@ import (
 	xg "github.com/orkestr8/xgraph"
 )
 
-func New(ref GraphRef, g xg.Graph, kind xg.EdgeKind, options Options) (Executor, error) {
+func NewExecutor(ref GraphRef, g xg.Graph, kind xg.EdgeKind, options Options) (Executor, error) {
 	ordered, err := xg.DirectedSort(g, kind)
 	if err != nil {
 		return nil, err

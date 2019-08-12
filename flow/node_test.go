@@ -39,7 +39,7 @@ func (n *nodeT) Attributes() map[string]interface{} {
 
 func TestNodeStartStop(t *testing.T) {
 	n := &node{
-		Logger: logger(1),
+		Logger: testlog{t},
 		Node:   &nodeT{id: "1"},
 	}
 
@@ -133,7 +133,7 @@ func TestNodeScatter(t *testing.T) {
 	u1 := &nodeT{id: "upstream1"}
 	u2 := &nodeT{id: "upstream2"}
 	n := &node{
-		Logger:    logger(1),
+		Logger:    testlog{t},
 		Node:      &nodeT{id: "operator"},
 		inputFrom: func() xg.NodeSlice { return []xg.Node{u1, u2} },
 		outbound:  []chan<- work{outbound1, outbound2},

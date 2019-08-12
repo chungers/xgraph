@@ -147,3 +147,21 @@ func (g *graph) Exec(ctx context.Context, args map[xg.Node]interface{}) (context
 
 	return ctx, aw, err
 }
+
+func (g *graph) ExecAwaitables(ctx context.Context, args map[xg.Node]Awaitable) (context.Context, Awaitable, error) {
+
+	ctx, ch, err := g.execFutures(ctx, args)
+	if err != nil {
+		return ctx, nil, err
+	}
+
+	aw := awaitableFrom(ctx)
+	if aw == nil {
+		aw = Async(ctx, func() (interface{}, error) {
+			return map[xg.Node]Awaitable(<-ch), nil
+		})
+		ctx = setAwaitable(ctx, aw)
+	}
+
+	return ctx, aw, err
+}

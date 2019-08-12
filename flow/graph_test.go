@@ -18,7 +18,7 @@ func testAnalyzeGraph(t *testing.T) (*graph, xg.Graph, xg.EdgeKind) {
 	require.NoError(t, err)
 
 	options := Options{
-		Logger: logger(1),
+		Logger: testlog{t},
 	}
 	g, err := analyze(ref, gg, deps, ordered, options)
 	require.NoError(t, err)

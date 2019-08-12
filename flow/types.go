@@ -28,6 +28,7 @@ type Options struct {
 type Executor interface {
 	io.Closer
 	Exec(context.Context, map[xg.Node]interface{}) (context.Context, Awaitable, error)
+	ExecAwaitables(context.Context, map[xg.Node]Awaitable) (context.Context, Awaitable, error)
 }
 
 type FlowGraph struct {
