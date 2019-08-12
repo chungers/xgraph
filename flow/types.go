@@ -2,6 +2,7 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 
 import (
 	"context"
+	"io"
 	"time"
 
 	xg "github.com/orkestr8/xgraph"
@@ -22,6 +23,12 @@ type Logger interface {
 
 type Options struct {
 	Logger
+}
+
+type Executor interface {
+	io.Closer
+	Exec(context.Context, map[xg.Node]interface{}) (context.Context, Awaitable, error)
+	ExecAwaitables(context.Context, map[xg.Node]Awaitable) (context.Context, Awaitable, error)
 }
 
 type FlowGraph struct {

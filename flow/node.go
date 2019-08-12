@@ -144,6 +144,15 @@ loop:
 	}
 }
 
+func tryClose(logger Logger, c chan<- gather) {
+	defer func() {
+		if e := recover(); e != nil {
+			logger.Warn("recovered:", e)
+		}
+	}()
+	close(c)
+}
+
 func (node *node) scatter(ready chan interface{}) {
 	pending := map[flowID]gather{}
 
@@ -186,6 +195,7 @@ func (node *node) scatter(ready chan interface{}) {
 			// Send the gathered futures to callback without blocking
 			select {
 			case w.callback <- gathered:
+				tryClose(w.Logger, w.callback)
 			default:
 			}
 			continue

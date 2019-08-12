@@ -4,6 +4,17 @@ import (
 	xg "github.com/orkestr8/xgraph"
 )
 
+func NewExecutor(ref GraphRef, g xg.Graph, kind xg.EdgeKind, options Options) (Executor, error) {
+	ordered, err := xg.DirectedSort(g, kind)
+	if err != nil {
+		return nil, err
+	}
+	gg, err := analyze(ref, g, kind, ordered, options)
+	gg.run()
+	return gg, err
+
+}
+
 func NewFlowGraph(g xg.Graph, kind xg.EdgeKind) (*FlowGraph, error) {
 	fg := &FlowGraph{
 		Graph:      g,

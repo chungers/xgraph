@@ -9,7 +9,7 @@ import (
 
 func TestContextFlowID(t *testing.T) {
 
-	require.Equal(t, nullFlowID, flowIDFrom(context.Background()))
+	require.Nil(t, flowIDFrom(context.Background()))
 
 	ctx := context.Background()
 	id := flowID(10000)

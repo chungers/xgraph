@@ -20,6 +20,39 @@ type Future interface {
 
 type Do func() (interface{}, error)
 
+type constant struct {
+	value interface{}
+}
+
+func (c constant) Ch() <-chan interface{} {
+	ch := make(chan interface{})
+	close(ch)
+	return ch
+}
+
+func (c constant) Value() interface{} {
+	return c.value
+}
+
+func (c constant) Error() error {
+	if err, is := c.value.(error); is {
+		return err
+	}
+	return nil
+}
+
+func (c constant) Canceled() bool {
+	return false
+}
+
+func (c constant) DeadlineExceeded() bool {
+	return false
+}
+
+func (c constant) Yield(v interface{}, err error) {
+	return // no-op
+}
+
 type future struct {
 	sync.WaitGroup
 	sync.RWMutex
@@ -110,4 +143,8 @@ func Async(ctx context.Context, do Do) Awaitable {
 	f := newFuture(do)
 	f.doAsync(ctx)
 	return f
+}
+
+func Const(v interface{}) Awaitable {
+	return &constant{value: v}
 }
