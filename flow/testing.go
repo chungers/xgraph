@@ -7,16 +7,28 @@ import (
 	xg "github.com/orkestr8/xgraph"
 )
 
+const (
+	// On slower machines testing.T.Log() fails when `go test -race`.
+	useTestingLog = true
+)
+
 type testlog struct {
 	*testing.T
 }
 
 func (s testlog) Log(context string, args ...interface{}) {
-	s.T.Log([]interface{}{"INFO", context, args}...)
+	if useTestingLog {
+		s.T.Log([]interface{}{"INFO", context, args}...)
+		return
+	}
+	fmt.Println([]interface{}{"INFO", context, args}...)
 }
 
 func (s testlog) Warn(context string, args ...interface{}) {
-	s.T.Log([]interface{}{"WARN", context, args}...)
+	if useTestingLog {
+		s.T.Log([]interface{}{"WARN", context, args}...)
+	}
+	fmt.Println([]interface{}{"WARN", context, args}...)
 }
 
 type benchlog struct {
