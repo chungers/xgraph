@@ -11,9 +11,9 @@ func testOrderByContextIndex(a, b xg.Edge) bool {
 	ca := a.Attributes()
 	cb := b.Attributes()
 	if len(ca) > 0 && len(cb) > 0 {
-		idx, ok := ca["order"].(int)
+		idx, ok := ca["arg"].(int)
 		if ok {
-			idx2, ok2 := cb["order"].(int)
+			idx2, ok2 := cb["arg"].(int)
 			if ok2 {
 				return idx < idx2
 			}

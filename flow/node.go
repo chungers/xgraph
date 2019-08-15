@@ -233,7 +233,7 @@ func (node *node) applyAsync(ctx context.Context, m gather) Awaitable {
 		}
 
 		// futures and inputFrom are 1:1, so args and inputFrom are 1:1
-		args, err := waitFor(ctx, futures)
+		args, err := waitFor(futures)
 		if err != nil {
 			return nil, err
 		}

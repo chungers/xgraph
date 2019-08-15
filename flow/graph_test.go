@@ -17,9 +17,7 @@ func testAnalyzeGraph(t *testing.T) (*graph, xg.Graph, xg.EdgeKind) {
 	ordered, err := xg.DirectedSort(gg, deps)
 	require.NoError(t, err)
 
-	options := Options{
-		Logger: testlog{t},
-	}
+	options := Options{}
 	g, err := analyze(ref, gg, deps, ordered, options)
 	require.NoError(t, err)
 	return g, gg, deps

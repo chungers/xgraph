@@ -4,12 +4,12 @@ import (
 	"fmt"
 )
 
-type nologger struct{}
+type nologging struct{}
 
-func (l nologger) Log(m string, args ...interface{}) {
+func (l nologging) Log(m string, args ...interface{}) {
 }
 
-func (l nologger) Warn(m string, args ...interface{}) {
+func (l nologging) Warn(m string, args ...interface{}) {
 }
 
 type logger int

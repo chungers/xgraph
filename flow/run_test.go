@@ -9,7 +9,7 @@ import (
 )
 
 // TODO - This one has a race.  Turn on go test -v -race
-func _TestRun(t *testing.T) {
+func TestV1Run(t *testing.T) {
 
 	input := xg.EdgeKind(1)
 	g := testBuildGraph(input)
@@ -17,7 +17,7 @@ func _TestRun(t *testing.T) {
 	flowGraph, err := NewFlowGraph(g, input)
 	require.NoError(t, err)
 
-	flowGraph.Logger = testlog{t}
+	flowGraph.Logger = nologging{}
 	flowGraph.EdgeLessFunc = testOrderByContextIndex
 
 	require.NoError(t, flowGraph.Compile())
@@ -39,7 +39,7 @@ func _TestRun(t *testing.T) {
 	require.Equal(t, "ratio([sumX([x1([x1v]) x2([x2v]) x3([x3v])]) sumY([x3([x3v]) y2([y2v]) y1([y1v])])])", dag.Value())
 }
 
-func BenchmarkCompileRun(b *testing.B) {
+func BenchmarkV1Run(b *testing.B) {
 	input := xg.EdgeKind(1)
 	g := testBuildGraph(input)
 
@@ -48,7 +48,7 @@ func BenchmarkCompileRun(b *testing.B) {
 		panic(err)
 	}
 
-	flowGraph.Logger = benchlog{B: b, log: false}
+	flowGraph.Logger = nologging{}
 	flowGraph.EdgeLessFunc = testOrderByContextIndex
 
 	err = flowGraph.Compile()

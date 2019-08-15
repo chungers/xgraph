@@ -105,7 +105,7 @@ func TestWaitForNormal(t *testing.T) {
 
 	result := make(chan []interface{})
 	go func() {
-		args, err := waitFor(ctx, f)
+		args, err := waitFor(f)
 		result <- []interface{}{args, err}
 	}()
 
@@ -138,7 +138,7 @@ func TestWaitForContextCancel(t *testing.T) {
 	done := make(chan interface{})
 	go func() {
 		defer close(done)
-		args, err := waitFor(ctx, f)
+		args, err := waitFor(f)
 		require.Error(t, err)
 		require.Nil(t, args)
 	}()
@@ -174,7 +174,7 @@ func TestWaitForContextAsyncError(t *testing.T) {
 	done := make(chan interface{})
 	go func() {
 		defer close(done)
-		args, err := waitFor(ctx, f)
+		args, err := waitFor(f)
 		require.Error(t, err)
 		require.Equal(t, verr, err)
 		require.Nil(t, args)
@@ -212,7 +212,7 @@ func TestWaitForContextTimeout(t *testing.T) {
 	done := make(chan interface{})
 	go func() {
 		defer close(done)
-		args, err := waitFor(ctx, f)
+		args, err := waitFor(f)
 		require.Error(t, err)
 		require.Nil(t, args)
 	}()

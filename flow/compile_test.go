@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCompileExec(t *testing.T) {
+func TestV1CompileExec(t *testing.T) {
 
 	input := xg.EdgeKind(1)
 	g := testBuildGraph(input)
@@ -15,13 +15,13 @@ func TestCompileExec(t *testing.T) {
 	flowGraph, err := NewFlowGraph(g, input)
 	require.NoError(t, err)
 
-	flowGraph.Logger = testlog{t}
+	flowGraph.Logger = nologging{}
 	flowGraph.EdgeLessFunc = testOrderByContextIndex
 
 	require.NoError(t, flowGraph.Compile())
 }
 
-func BenchmarkCompile(b *testing.B) {
+func BenchmarkV1Compile(b *testing.B) {
 
 	input := xg.EdgeKind(1)
 	g := testBuildGraph(input)
@@ -31,7 +31,7 @@ func BenchmarkCompile(b *testing.B) {
 		panic(err)
 	}
 
-	flowGraph.Logger = benchlog{B: b, log: false}
+	flowGraph.Logger = nologging{}
 	flowGraph.EdgeLessFunc = testOrderByContextIndex
 
 	for i := 0; i < b.N; i++ {
