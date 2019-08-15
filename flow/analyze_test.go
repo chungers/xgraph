@@ -16,7 +16,7 @@ func TestAnalyze1(t *testing.T) {
 	require.NoError(t, err)
 
 	options := Options{
-		Logger: testlog{t},
+		Logger: nologging{},
 	}
 	g, err := analyze(ref, gg, deps, ordered, options)
 	require.NoError(t, err)

@@ -3,7 +3,6 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	xg "github.com/orkestr8/xgraph"
 )
@@ -38,46 +37,16 @@ func (m gather) futuresForNodes(ctx context.Context,
 	return
 }
 
-func waitFor(ctx context.Context, futures []Future) ([]interface{}, error) {
-
-	args := make([]interface{}, len(futures))
-
-	cases := []reflect.SelectCase{
-		{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(ctx.Done()),
-		},
-	}
-	for i := range futures {
-		ch := reflect.ValueOf(nil)
-		if futures[i] != nil {
-			if v := futures[i].Ch(); v != nil {
-				ch = reflect.ValueOf(v)
-			}
-		}
-		cases = append(cases,
-			reflect.SelectCase{
-				Dir:  reflect.SelectRecv,
-				Chan: ch,
-			})
-	}
-
-	for i := 0; i < len(futures); i++ {
-		// The channel used by the future isn't for passing values. It's only for signaling.
-		// Therefore, we don't need to get the value and should access the value of the future
-		// via the Value() and Error() methods.
-		index, _, ok := reflect.Select(cases)
-		if !ok {
-			cases[index].Chan = reflect.ValueOf(nil)
-			if index == 0 {
-				return nil, ctx.Err()
-			}
-		}
-		if err := futures[index-1].Error(); err != nil {
+// Wait for the futures to complete.  Note the futures are themselves cancellable, if the
+// contexts given cancels.
+func waitFor(futures []Future) ([]interface{}, error) {
+	out := []interface{}{}
+	for _, f := range futures {
+		if err := f.Error(); err != nil {
 			return nil, err
+		} else {
+			out = append(out, f.Value())
 		}
-		args[index-1] = futures[index-1].Value()
 	}
-
-	return args, nil
+	return out, nil
 }

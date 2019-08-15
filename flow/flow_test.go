@@ -12,9 +12,7 @@ func TestFlowNew(t *testing.T) {
 	ref := GraphRef("test")
 	kind := xg.EdgeKind(1)
 	gg := testBuildGraph(kind)
-	options := Options{
-		Logger: testlog{t},
-	}
+	options := Options{}
 	executor, err := NewExecutor(ref, gg, kind, options)
 	require.NoError(t, err)
 
@@ -25,9 +23,7 @@ func TestFlowExecFull(t *testing.T) {
 	ref := GraphRef("test")
 	kind := xg.EdgeKind(1)
 	gg := testBuildGraph(kind)
-	options := Options{
-		Logger: testlog{t},
-	}
+	options := Options{}
 	executor, err := NewExecutor(ref, gg, kind, options)
 	require.NoError(t, err)
 
@@ -71,9 +67,7 @@ func TestFlowExecPartialCalls(t *testing.T) {
 	ref := GraphRef("test")
 	kind := xg.EdgeKind(1)
 	gg := testBuildGraph(kind)
-	options := Options{
-		Logger: testlog{t},
-	}
+	options := Options{}
 	executor, err := NewExecutor(ref, gg, kind, options)
 	require.NoError(t, err)
 
@@ -122,14 +116,27 @@ func TestFlowExecPartialCalls(t *testing.T) {
 	require.Equal(t, exp, <-ch2)
 }
 
+func BenchmarkCompile(b *testing.B) {
+
+	for i := 0; i < b.N; i++ {
+
+		ref := GraphRef("test")
+		kind := xg.EdgeKind(1)
+		gg := testBuildGraph(kind)
+		options := Options{}
+
+		executor, err := NewExecutor(ref, gg, kind, options)
+		require.NoError(b, err)
+		require.NoError(b, executor.Close())
+	}
+}
+
 func BenchmarkExecWithConsts(b *testing.B) {
 
 	ref := GraphRef("test")
 	kind := xg.EdgeKind(1)
 	gg := testBuildGraph(kind)
-	options := Options{
-		Logger: benchlog{B: b, log: false},
-	}
+	options := Options{}
 
 	executor, err := NewExecutor(ref, gg, kind, options)
 	require.NoError(b, err)
@@ -165,9 +172,7 @@ func BenchmarkExecWithAwaitables(b *testing.B) {
 	ref := GraphRef("test")
 	kind := xg.EdgeKind(1)
 	gg := testBuildGraph(kind)
-	options := Options{
-		Logger: benchlog{B: b, log: false},
-	}
+	options := Options{}
 
 	executor, err := NewExecutor(ref, gg, kind, options)
 	require.NoError(b, err)
