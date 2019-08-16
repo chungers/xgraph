@@ -31,12 +31,6 @@ type node struct {
 
 type then xg.OperatorFunc
 
-type attributes struct {
-	Timeout    Duration `json:"timeout,omitempty"`
-	MaxWorkers int      `json:"max_workers,omitempty"`
-	EdgeSorter string   `json:"edge_sorter,omitempty"`
-}
-
 // sets default values for the receiver
 func (node *node) defaults() *node {
 	if node.Logger == nil {
@@ -211,9 +205,15 @@ func (node *node) scatter(ready chan interface{}) {
 		// data for itself.  This is for the case when a graph's input node is wired to
 		// have the collect channel receiving work from outside the graph.  See graph.exec().
 		var future Awaitable
-		if len(gathered) == 1 && gathered[node.Node] != nil {
+		switch {
+		case len(gathered) == 1 && gathered[node.Node] != nil:
 			future = gathered[node.Node] // just use the future given in the work message
-		} else {
+
+		case node.attributes.Inline:
+			// TODO - This case will hang in TestFlowExecFull
+			future = node.applyInline(ctx, gathered) // inputs from other nodes and not itself
+
+		default:
 			future = node.applyAsync(ctx, gathered) // inputs from other nodes and not itself
 		}
 
@@ -221,6 +221,36 @@ func (node *node) scatter(ready chan interface{}) {
 		node.dispatch(work{ctx: w.ctx, id: w.id, from: node.Node, Awaitable: future, callback: w.callback})
 	}
 
+}
+
+func (node *node) applyInline(ctx context.Context, m gather) Awaitable {
+
+	return Inline(func() (interface{}, error) {
+
+		keys, futures, err := m.futuresForNodes(ctx, node.inputFrom)
+		if err != nil {
+			return nil, err
+		}
+
+		// futures and inputFrom are 1:1, so args and inputFrom are 1:1
+		args, err := waitFor(futures)
+		if err != nil {
+			return nil, err
+		}
+
+		if node.then == nil {
+			// If no operator, simply return a map of all the values by Node.
+			// This is used for a special collection node for the entire graph.
+			m := map[xg.Node]interface{}{}
+			for i := range keys {
+				m[keys[i]] = args[i]
+			}
+			return m, nil
+		}
+
+		// Do work rather than collect the data.
+		return node.apply(ctx, args)
+	})
 }
 
 func (node *node) applyAsync(ctx context.Context, m gather) Awaitable {

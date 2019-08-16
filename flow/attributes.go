@@ -33,6 +33,13 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	}
 }
 
+type attributes struct {
+	Inline     bool     `json:"inline,omitempty"`
+	Timeout    Duration `json:"timeout,omitempty"`
+	MaxWorkers int      `json:"max_workers,omitempty"`
+	EdgeSorter string   `json:"edge_sorter,omitempty"`
+}
+
 // unmarshals a given map into the receiver's fields.
 func (a *attributes) unmarshal(m map[string]interface{}) error {
 	if m == nil {

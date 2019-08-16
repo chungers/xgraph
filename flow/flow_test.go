@@ -19,10 +19,54 @@ func TestFlowNew(t *testing.T) {
 	require.NoError(t, executor.Close())
 }
 
-func TestFlowExecFull(t *testing.T) {
+func TestFlowExecFullAsync(t *testing.T) {
 	ref := GraphRef("test")
 	kind := xg.EdgeKind(1)
 	gg := testBuildGraph(kind)
+	options := Options{}
+	executor, err := NewExecutor(ref, gg, kind, options)
+	require.NoError(t, err)
+
+	x1 := gg.Node(xg.NodeKey("x1"))
+	x2 := gg.Node(xg.NodeKey("x2"))
+	x3 := gg.Node(xg.NodeKey("x3"))
+	y1 := gg.Node(xg.NodeKey("y1"))
+	y2 := gg.Node(xg.NodeKey("y2"))
+	ratio := gg.Node(xg.NodeKey("ratio"))
+
+	ctx := context.Background()
+
+	ctx, future1, err := executor.Exec(ctx, map[xg.Node]interface{}{
+		x1: "X1",
+		x2: "X2",
+		x3: "X3",
+		y1: "Y1",
+		y2: "Y2",
+	})
+
+	ch1 := make(chan interface{})
+	go func() {
+		m := future1.Value().(map[xg.Node]Awaitable)
+		ch1 <- m[ratio].Value()
+		close(ch1)
+	}()
+
+	ch2 := make(chan interface{})
+	go func() {
+		m := future1.Value().(map[xg.Node]Awaitable)
+		ch2 <- m[ratio].Value()
+		close(ch2)
+	}()
+
+	exp := "ratio([sumX([X1 X2 X3]) sumY([X3 Y2 Y1])])"
+	require.Equal(t, exp, <-ch1)
+	require.Equal(t, exp, <-ch2)
+}
+
+func TestFlowExecFullInline(t *testing.T) {
+	ref := GraphRef("test")
+	kind := xg.EdgeKind(1)
+	gg := testBuildGraph(kind, true)
 	options := Options{}
 	executor, err := NewExecutor(ref, gg, kind, options)
 	require.NoError(t, err)
@@ -131,11 +175,19 @@ func BenchmarkCompile(b *testing.B) {
 	}
 }
 
-func BenchmarkExecWithConsts(b *testing.B) {
+func BenchmarkExecWithConstsAsync(b *testing.B) {
+	benchmarkExecWithConsts(b, false)
+}
+
+func BenchmarkExecWithConstsInline(b *testing.B) {
+	benchmarkExecWithConsts(b, true)
+}
+
+func benchmarkExecWithConsts(b *testing.B, inline bool) {
 
 	ref := GraphRef("test")
 	kind := xg.EdgeKind(1)
-	gg := testBuildGraph(kind)
+	gg := testBuildGraph(kind, inline)
 	options := Options{}
 
 	executor, err := NewExecutor(ref, gg, kind, options)
@@ -167,11 +219,19 @@ func BenchmarkExecWithConsts(b *testing.B) {
 	require.NoError(b, executor.Close())
 }
 
-func BenchmarkExecWithAwaitables(b *testing.B) {
+func BenchmarkExecWithAwaitablesAsync(b *testing.B) {
+	benchmarkExecWithAwaitables(b, false)
+}
+
+func BenchmarkExecWithAwaitablesInline(b *testing.B) {
+	benchmarkExecWithAwaitables(b, true)
+}
+
+func benchmarkExecWithAwaitables(b *testing.B, inline bool) {
 
 	ref := GraphRef("test")
 	kind := xg.EdgeKind(1)
-	gg := testBuildGraph(kind)
+	gg := testBuildGraph(kind, inline)
 	options := Options{}
 
 	executor, err := NewExecutor(ref, gg, kind, options)

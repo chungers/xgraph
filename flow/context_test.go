@@ -17,14 +17,3 @@ func TestContextFlowID(t *testing.T) {
 	require.Equal(t, id, flowIDFrom(ctx))
 
 }
-
-// func TestContextOperator(t *testing.T) {
-
-// 	require.Equal(t, nullFlowOperator, flowOperatorFrom(context.Background()))
-
-// 	ctx := context.Background()
-// 	operator := "test"
-// 	ctx = setFlowOperator(ctx, operator)
-// 	require.Equal(t, operator, flowOperatorFrom(ctx))
-
-// }
