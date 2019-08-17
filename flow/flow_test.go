@@ -290,8 +290,6 @@ func testFlowExecFullConcurrent(t *testing.T, inline bool) {
 	ratio := gg.Node(xg.NodeKey("ratio"))
 
 	client := func(t *testing.T, i int, wg *sync.WaitGroup, input map[xg.Node]interface{}) {
-		fmt.Println("run", i)
-
 		exp := "ratio([sumX([x1 x2 x3]) sumY([x3 y2 y1])])" // template
 		// substitute real input
 		for n, v := range input {
@@ -302,7 +300,6 @@ func testFlowExecFullConcurrent(t *testing.T, inline bool) {
 		require.NoError(t, err)
 		require.Equal(t, exp, future.Value().(map[xg.Node]Awaitable)[ratio].Value())
 		wg.Done()
-		fmt.Println("done", i)
 	}
 
 	rand.Seed(42)
