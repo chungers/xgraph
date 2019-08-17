@@ -39,7 +39,7 @@ func analyze(ref GraphRef, g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice,
 	for _, this := range ordered {
 		from := g.From(this, kind).Edges().Slice()
 		for _, edge := range from {
-			links[edge] = make(chan work)
+			links[edge] = allocWorkChan()
 		}
 	}
 
@@ -64,7 +64,7 @@ func analyze(ref GraphRef, g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice,
 		// TODO(dchung) - implement sorter based on reflection of the operator function
 		xg.SortEdges(to, edgeSorter(attr.EdgeSorter))
 
-		collect := make(chan work)
+		collect := allocWorkChan()
 		inbound, err := receiveChannels(links, to)
 		if err != nil {
 			return nil, err
@@ -114,7 +114,7 @@ func analyze(ref GraphRef, g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice,
 				panic(fmt.Errorf("No outputTo nodes but allocated output channels: %v", this))
 			}
 			// we should have a collection point
-			ch := make(chan work)
+			ch := allocWorkChan()
 			node.outbound = []chan<- work{ch}
 			graphOutput[this] = ch
 		}
@@ -130,7 +130,7 @@ func analyze(ref GraphRef, g xg.Graph, kind xg.EdgeKind, ordered xg.NodeSlice,
 		terminal:  true,
 		Node:      ref,
 		Logger:    options.Logger,
-		collect:   make(chan work),
+		collect:   allocWorkChan(),
 		inbound:   gOutputChs,
 		inputFrom: func() xg.NodeSlice { return gOutput },
 		stop:      make(chan interface{}),

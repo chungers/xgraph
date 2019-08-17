@@ -43,7 +43,7 @@ func (node *node) defaults() *node {
 		node.attributes = attributes{}
 	}
 	if node.collect == nil {
-		node.collect = make(chan work)
+		node.collect = allocWorkChan()
 	}
 	if node.stop == nil {
 		node.stop = make(chan interface{})
@@ -210,7 +210,6 @@ func (node *node) scatter(ready chan interface{}) {
 			future = gathered[node.Node] // just use the future given in the work message
 
 		case node.attributes.Inline:
-			// TODO - This case will hang in TestFlowExecFull
 			future = node.applyInline(ctx, gathered) // inputs from other nodes and not itself
 
 		default:
