@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAnalyze1(t *testing.T) {
+func TestAnalyzeBase(t *testing.T) {
 	deps := xg.EdgeKind(1)
 	gg := testBuildGraph(deps)
 

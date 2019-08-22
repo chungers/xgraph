@@ -32,7 +32,7 @@ func TestGatherHasKeys(t *testing.T) {
 		}))
 }
 
-func TestOrderFutures(t *testing.T) {
+func TestGatherOrderFutures(t *testing.T) {
 	n1 := &nodeT{id: "1"}
 	n2 := &nodeT{id: "2"}
 	n3 := &nodeT{id: "3"}
@@ -77,7 +77,7 @@ func TestOrderFutures(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestWaitForNormal(t *testing.T) {
+func TestGatherWaitForNormal(t *testing.T) {
 
 	c := []chan interface{}{}
 	f := []Future{}
@@ -120,7 +120,7 @@ func TestWaitForNormal(t *testing.T) {
 	close(result)
 }
 
-func TestWaitForContextCancel(t *testing.T) {
+func TestGatherWaitForContextCancel(t *testing.T) {
 
 	block := make(chan interface{})
 	f := []Future{}
@@ -150,7 +150,7 @@ func TestWaitForContextCancel(t *testing.T) {
 	<-done
 }
 
-func TestWaitForContextAsyncError(t *testing.T) {
+func TestGatherWaitForContextAsyncError(t *testing.T) {
 
 	c := []chan interface{}{}
 	f := []Future{}
@@ -189,7 +189,7 @@ func TestWaitForContextAsyncError(t *testing.T) {
 	<-done
 }
 
-func TestWaitForContextTimeout(t *testing.T) {
+func TestGatherWaitForContextTimeout(t *testing.T) {
 
 	c := []chan interface{}{}
 	f := []Future{}
