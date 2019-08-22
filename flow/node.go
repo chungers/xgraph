@@ -49,7 +49,7 @@ func (node *node) defaults() *node {
 		node.attributes = attributes{}
 	}
 	if node.collect == nil {
-		node.collect = make(chan work)
+		node.collect = allocWorkChan()
 	}
 	if node.stop == nil {
 		node.stop = make(chan interface{})

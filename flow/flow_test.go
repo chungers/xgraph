@@ -2,6 +2,10 @@ package flow // import "github.com/orkestr8/xgraph/flow"
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
+	"strings"
+	"sync"
 	"testing"
 
 	xg "github.com/orkestr8/xgraph"
@@ -114,6 +118,52 @@ func TestFlowExecPartialCalls(t *testing.T) {
 	exp := "ratio([sumX([X1 X2 X3]) sumY([X3 Y2 Y1])])"
 	require.Equal(t, exp, <-ch1)
 	require.Equal(t, exp, <-ch2)
+}
+
+func TestFlowExecFullConcurrentCallers(t *testing.T) {
+	ref := GraphRef("test")
+	kind := xg.EdgeKind(1)
+	gg := testBuildGraph(kind)
+	options := Options{}
+	executor, err := NewExecutor(ref, gg, kind, options)
+	require.NoError(t, err)
+
+	x1 := gg.Node(xg.NodeKey("x1"))
+	x2 := gg.Node(xg.NodeKey("x2"))
+	x3 := gg.Node(xg.NodeKey("x3"))
+	y1 := gg.Node(xg.NodeKey("y1"))
+	y2 := gg.Node(xg.NodeKey("y2"))
+	ratio := gg.Node(xg.NodeKey("ratio"))
+
+	client := func(t *testing.T, i int, wg *sync.WaitGroup, input map[xg.Node]interface{}) {
+		exp := "ratio([sumX([x1 x2 x3]) sumY([x3 y2 y1])])" // template
+		// substitute real input
+		for n, v := range input {
+			exp = strings.ReplaceAll(exp, n.NodeKey().(string), fmt.Sprintf("%v", v))
+		}
+
+		_, future, err := executor.Exec(context.Background(), input)
+		require.NoError(t, err)
+		require.Equal(t, exp, future.Value().(map[xg.Node]Awaitable)[ratio].Value())
+		wg.Done()
+	}
+
+	rand.Seed(42)
+
+	wg := &sync.WaitGroup{}
+
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go client(t, i, wg, map[xg.Node]interface{}{
+			x1: rand.Int(),
+			x2: rand.Int(),
+			x3: rand.Int(),
+			y1: rand.Int(),
+			y2: rand.Int(),
+		})
+	}
+
+	wg.Wait()
 }
 
 func BenchmarkCompile(b *testing.B) {

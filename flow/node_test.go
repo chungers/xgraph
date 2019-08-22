@@ -6,6 +6,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	xg "github.com/orkestr8/xgraph"
 	"github.com/stretchr/testify/require"
@@ -56,7 +57,7 @@ func TestNodeGather(t *testing.T) {
 	inbound := make([]chan work, count)
 	typed := make([]<-chan work, count)
 	for i := range inbound {
-		inbound[i] = make(chan work)
+		inbound[i] = allocWorkChan()
 		typed[i] = inbound[i]
 	}
 	n := &node{
@@ -114,6 +115,8 @@ func TestNodeGather(t *testing.T) {
 	close(start)
 
 	expected := <-sent
+
+	time.Sleep(1 * time.Second) // wait for all work to be processed
 
 	n.Close() // this will cause the collection loop to end
 

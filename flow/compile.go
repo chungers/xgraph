@@ -38,7 +38,7 @@ func (fg *FlowGraph) Compile() error {
 		// we create a work channel for downstream node to receive
 		outbound := map[xg.Edge]chan<- work{}
 		for i := range from {
-			ch := make(chan work)
+			ch := allocWorkChan()
 			fg.links = append(fg.links, ch)
 			outbound[from[i]] = ch
 			edgeChannels[from[i]] = ch // to be looked up by downstream
@@ -46,7 +46,7 @@ func (fg *FlowGraph) Compile() error {
 		if len(from) == 0 {
 			// This node has no edges to other nodes. So it's terminal
 			// so we collect its output to send the graph's collector.
-			ch := make(chan work)
+			ch := allocWorkChan()
 			fg.output[this] = ch
 			go func() {
 				for {
@@ -66,7 +66,7 @@ func (fg *FlowGraph) Compile() error {
 
 		// For input, we need one more aggregation channel
 		// that collects all the input for the given flow id.
-		aggregator := make(chan work)
+		aggregator := allocWorkChan()
 		go func() {
 
 			pending := map[flowID]gather{}
@@ -168,7 +168,7 @@ func (fg *FlowGraph) Compile() error {
 		if len(to) == 0 {
 			// No input means this is a Source node whose computation will be input to others
 			// So this is an input node for the graph.
-			inputChan := make(chan work)
+			inputChan := allocWorkChan()
 			fg.input[this] = inputChan
 
 			// This input channel will send work directly to the aggregator

@@ -15,6 +15,10 @@ func NewExecutor(ref GraphRef, g xg.Graph, kind xg.EdgeKind, options Options) (E
 
 }
 
+func allocWorkChan() chan work {
+	return make(chan work, 128)
+}
+
 func NewFlowGraph(g xg.Graph, kind xg.EdgeKind) (*FlowGraph, error) {
 	fg := &FlowGraph{
 		Graph:      g,
@@ -22,7 +26,7 @@ func NewFlowGraph(g xg.Graph, kind xg.EdgeKind) (*FlowGraph, error) {
 		links:      []chan work{},
 		input:      map[xg.Node]chan<- work{},
 		output:     map[xg.Node]chan work{},
-		aggregator: make(chan work),
+		aggregator: allocWorkChan(),
 	}
 	ordered, err := xg.DirectedSort(g, kind)
 	if err != nil {

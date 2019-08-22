@@ -49,9 +49,9 @@ func TestAnalyzePairs(t *testing.T) {
 		&nodeT{id: "3"},
 	}
 	chs := []<-chan work{
-		make(chan work),
-		make(chan work),
-		make(chan work),
+		allocWorkChan(),
+		allocWorkChan(),
+		allocWorkChan(),
 	}
 	m := map[xg.Node]<-chan work{}
 	for i := range keys {
