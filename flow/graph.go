@@ -47,6 +47,9 @@ func (g *graph) run() {
 }
 
 func (g *graph) Close() (err error) {
+	for i := range g.input {
+		g.input[i] = nil
+	}
 	for _, n := range g.ordered {
 		if err = n.Close(); err != nil {
 			return err
@@ -91,14 +94,17 @@ func (g *graph) execFutures(ctx context.Context, args map[xg.Node]Awaitable) (co
 
 	for k, awaitable := range args {
 		if ch, has := g.input[k]; has {
+			if ch == nil {
+				continue
+			}
 			source := k
-			ch <- work{
+			trySend(loggerFrom(ctx), ch, work{
 				ctx:       ctx,
 				id:        id,
 				from:      source,
 				callback:  callback,
 				Awaitable: awaitable,
-			}
+			})
 		} else {
 			return ctx, nil, fmt.Errorf("not an input node %v", k)
 		}
@@ -119,6 +125,15 @@ func (g *graph) execFutures(ctx context.Context, args map[xg.Node]Awaitable) (co
 		}()
 	}
 	return ctx, callback, nil
+}
+
+func trySend(logger Logger, ch chan<- work, w work) {
+	defer func() {
+		if err := recover(); err != nil {
+			logger.Warn("Error", "err", err)
+		}
+	}()
+	ch <- w
 }
 
 func (g *graph) execValues(ctx context.Context, args map[xg.Node]interface{}) (context.Context, <-chan gather, error) {

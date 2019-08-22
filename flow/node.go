@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sync"
 	"time"
 
 	xg "github.com/orkestr8/xgraph"
@@ -93,6 +94,37 @@ func (node *node) Close() (err error) {
 	close(node.stop)
 
 	return
+}
+
+func (node *node) gather0(ready chan interface{}) {
+	if node.stop == nil {
+		panic(fmt.Errorf("gather: node.stop cannot be nil"))
+	}
+
+	var wg sync.WaitGroup
+	for i := range node.inbound {
+		wg.Add(1)
+		go func(c <-chan work) {
+			for {
+				w, ok := <-c
+				if !ok {
+					wg.Done()
+					return
+				}
+				if node.collect != nil {
+					node.collect <- w
+				}
+			}
+		}(node.inbound[i])
+	}
+	go func() {
+		wg.Wait()
+		close(node.collect)
+		node.collect = nil
+	}()
+
+	close(ready)
+	node.Log("node.gather", "node", node.Node)
 }
 
 func (node *node) gather(ready chan interface{}) {
